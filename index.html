@@ -38,6 +38,15 @@
         </ion-content>
       </ion-tab>
     </ion-tabs>
+    <script type="text/javascript">
+    var Keen=Keen||{configure:function(e){this._cf=e},addEvent:function(e,t,n,i){this._eq=this._eq||[],this._eq.push([e,t,n,i])},setGlobalProperties:function(e){this._gp=e},onChartsReady:function(e){this._ocrq=this._ocrq||[],this._ocrq.push(e)}};(function(){var e=document.createElement("script");e.type="text/javascript",e.async=!0,e.src=("https:"==document.location.protocol?"https://":"http://")+"dc8na2hxrj29i.cloudfront.net/code/keen-2.1.0-min.js";var t=document.getElementsByTagName("script")[0];t.parentNode.insertBefore(e,t)})();
+
+    // Configure the Keen object with your Project ID and (optional) access keys.
+    Keen.configure({
+      projectId: "510ae487a136b03d10000005",
+      writeKey: "38db12600b44fbbdb6e987c6d8af7f1797d01d25b67c1f79823d31bcc71f347d8d896aebcb257b8966347e1d5a2eca356e8894ad1c9f634dbc2a94f79804ab99acfb7cf1f19a70301f85479df4b3ddce7895ee072e1726723c01652f63b5591cb22603a280ab8dcd8d64fc4acb862b03", // required for sending events
+    });
+</script>
     <script>
       angular.module('myApp', ['ionic', 'ionic.services.analytics', 'ionic.services.common'])
 

@@ -38,8 +38,7 @@ angular.module('ionic.services.analytics', ['ionic.services.common'])
         return;
       }
       var data = {};
-      $ionicTrack.send({
-        eventName: '_click',
+      $ionicTrack.send('tap', {
         coords: {
           x: event.pageX,
           y: event.pageY
@@ -62,8 +61,7 @@ angular.module('ionic.services.analytics', ['ionic.services.common'])
 
       var itemScope = angular.element(item).scope();
 
-      $ionicTrack.send({
-        eventName: '_click',
+      $ionicTrack.send('tap', {
         type: 'tab-item',
         scope: scopeClean(itemScope),
         coords: {
@@ -118,7 +116,7 @@ angular.module('ionic.services.analytics', ['ionic.services.common'])
       }
       return null;
     },
-    send: function(data) {
+    send: function(eventName, data) {
       var q = $q.defer();
 
       var app = $ionicApp.getApp();
@@ -132,6 +130,7 @@ angular.module('ionic.services.analytics', ['ionic.services.common'])
           'status': 'sent',
           'message': data
         });
+        Keen.addEvent(eventName, data);
         q.resolve({
           'status': 'sent',
           'message': data
@@ -141,15 +140,13 @@ angular.module('ionic.services.analytics', ['ionic.services.common'])
       return q.promise;
     },
     track: function(eventName, data) {
-      return this.send({
-        eventName: eventName,
+      return this.send(eventName, {
         data: data
       });
     },
 
     trackClick: function(x, y, data) {
-      return this.send({
-        eventName: '_click',
+      return this.send('tap', {
         coords: {
           x: x,
           y: y
