@@ -14,17 +14,16 @@ angular.module('ionic.services.common', [])
 .provider('$ionicApp', function() {
   var app = {};
 
-  // Return account information
-  this.getApp = function() {
-    return app;
-  };
 
   this.identify = function(opts) {
     app = opts;
   };
 
   this.$get = [function() {
-    return function() {
+    return {
+      getApp: function() {
+        return app;
+      }
     }
   }];
 });

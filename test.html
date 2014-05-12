@@ -14,9 +14,11 @@
         $ionicAppProvider.identify({
           app_id: 'asdfa'
         });
+      }])
 
-        console.log($ionicAppProvider.getApp());
-      }]);
+      .run(['$ionicApp', function($ionicApp) {
+        console.log('Running', $ionicApp.getApp());
+      }])
     </script>
   </body>
 </html>
