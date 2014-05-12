@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Test</title>
+    <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.2.16/angular.min.js"></script>
+    <script src="identity/ionicApp.js"></script>
+  </head>
+  <body ng-app="test">
+
+    <script>
+      angular.module('test', ['ionic.services.common'])
+
+      .config(['$ionicAppProvider', function($ionicAppProvider) {
+        $ionicAppProvider.identify({
+          app_id: 'asdfa'
+        });
+
+        console.log($ionicAppProvider.getApp());
+      }]);
+    </script>
+  </body>
+</html>
