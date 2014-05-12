@@ -1,5 +1,11 @@
-angular.module('ionic.analytics', [])
+angular.module('ionic.services.analytics', ['ionic.services.common'])
 
+/**
+ * @private
+ * Clean a given scope (for sending scope data to the server for analytics purposes.
+ * This removes things we don't care about and tries to just expose
+ * useful scope data.
+ */
 .factory('scopeClean', function() {
   return function(scope) {
     var obj = {};
@@ -18,6 +24,10 @@ angular.module('ionic.analytics', [])
   }
 })
 
+/**
+ * @private
+ * When the app runs, add some heuristics to track for UI events.
+ */
 .run(['$ionicTrack', 'scopeClean', function($ionicTrack, scopeClean) {
   $ionicTrack.addType({
     name: 'button',
@@ -66,7 +76,30 @@ angular.module('ionic.analytics', [])
 }])
 
 
-.factory('$ionicTrack', ['$q', '$timeout', function($q, $timeout) {
+/**
+ * @ngdoc service
+ * @name $ionicTrack
+ * @module ionic.services.analytics
+ * @description
+ *
+ * A simple yet powerful analytics tracking system.
+ *
+ * The simple format is eventName, eventData. Both are arbitrary but should be
+ * the same as previous events if you wish to query on them later.
+ *
+ * @usage
+ * ```javascript
+ * $ionicTrack.track('Load', {
+ *   what: 'this'
+ * });
+ *
+ * // Click tracking
+ * $ionicTrack.trackClick(x, y, {
+ *   thing: 'button'
+ * });
+ * ```
+ */
+.factory('$ionicTrack', ['$q', '$timeout', '$ionicApp', function($q, $timeout, $ionicApp) {
   var _types = [];
   return {
     addType: function(type) {
@@ -87,6 +120,12 @@ angular.module('ionic.analytics', [])
     },
     send: function(data) {
       var q = $q.defer();
+
+      var app = $ionicApp.getApp();
+
+      data = angular.extend(data, {
+        _app: app
+      });
 
       $timeout(function() {
         console.log('Sending', {
@@ -122,6 +161,23 @@ angular.module('ionic.analytics', [])
   }
 }])
 
+/**
+ * @ngdoc directive
+ * @name ionTrackClick
+ * @module ionic.services.analytics
+ * @restrict A
+ * @parent ionic.directive:ionTrackClick
+ *
+ * @description
+ *
+ * A convenient directive to automatically track a click/tap on a button
+ * or other tappable element.
+ *
+ * @usage
+ * ```html
+ * <button class="button button-clear" ion-track-click ion-track-event="cta-tap">Try now!</button>
+ * ```
+ */
 .directive('ionTrackClick', ['$ionicTrack', 'scopeClean', function($ionicTrack, scopeClean) {
   return {
     restrict: 'A',
@@ -137,6 +193,25 @@ angular.module('ionic.analytics', [])
   }
 }])
 
+/**
+ * @ngdoc directive
+ * @name ionTrackAuto
+ * @module ionic.services.analytics
+ * @restrict A
+ * @parent ionic.directive:ionTrackAuto
+ *
+ * @description
+ *
+ * Automatically track events on UI elements. This directive tracks heuristics to automatically detect
+ * taps and interactions on common built-in Ionic components.
+ *
+ * None: this element should be applied on the body tag.
+ *
+ * @usage
+ * ```html
+ * <body ion-track-auto></body>
+ * ```
+ */
 .directive('ionTrackAuto', ['$document', '$ionicTrack', 'scopeClean', function($document, $ionicTrack, scopeClean) {
   var getType = function(e) {
     if(e.target.classList) {
