@@ -97,8 +97,9 @@ angular.module('ionic.services.analytics', ['ionic.services.common'])
  * });
  * ```
  */
-.factory('$ionicTrack', ['$q', '$timeout', '$ionicApp', function($q, $timeout, $ionicApp) {
+.factory('$ionicTrack', ['$q', '$timeout', '$state', '$ionicApp', function($q, $timeout, $state, $ionicApp) {
   var _types = [];
+
   return {
     addType: function(type) {
       _types.push(type);
@@ -121,7 +122,10 @@ angular.module('ionic.services.analytics', ['ionic.services.common'])
 
       var app = $ionicApp.getApp();
 
+      console.log("Current state:", $state.current.name);
+
       data = angular.extend(data, {
+        activeState: $state.current.name,
         _app: app
       });
 

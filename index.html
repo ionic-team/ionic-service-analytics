@@ -12,44 +12,148 @@
     <script src="js/ionicAnalytics.js"></script>
   </head>
   <body ng-app="myApp" ng-controller="MyCtrl" ion-track-auto>
-    <ion-tabs>
-      <ion-tab title="Home">
-        <ion-header-bar>
-          <h1 class="title">Home</h1>
-        </ion-header-bar>
-        <ion-content class="padding">
-          <button class="button button-positive">Auto Track</button>
-        </ion-content>
-      </ion-tab>
-      <ion-tab title="Friends">
-        <ion-header-bar>
-          <h1 class="title">Friends</h1>
-        </ion-header-bar>
-        <ion-content class="padding">
-          <button class="button button-positive">Auto Track</button>
-        </ion-content>
-      </ion-tab>
-      <ion-tab title="Settings">
-        <ion-header-bar>
-          <h1 class="title">Settings</h1>
-        </ion-header-bar>
-        <ion-content class="padding">
-          <button class="button button-positive">Auto Track</button>
-        </ion-content>
-      </ion-tab>
-    </ion-tabs>
+    <!-- 
+      The nav bar that will be updated as we navigate between views.
+    -->
+    <ion-nav-bar class="bar-stable nav-title-slide-ios7">
+      <ion-nav-back-button class="button-icon icon ion-chevron-left">
+        Back
+      </ion-nav-back-button>
+    </ion-nav-bar>
+    <!-- 
+      The views will be rendered in the <ion-nav-view> directive below
+      Templates are in the /templates folder (but you could also
+      have templates inline in this html file if you'd like).
+    -->
+    <ion-nav-view></ion-nav-view>
+
     <script type="text/javascript">
     var Keen=Keen||{configure:function(e){this._cf=e},addEvent:function(e,t,n,i){this._eq=this._eq||[],this._eq.push([e,t,n,i])},setGlobalProperties:function(e){this._gp=e},onChartsReady:function(e){this._ocrq=this._ocrq||[],this._ocrq.push(e)}};(function(){var e=document.createElement("script");e.type="text/javascript",e.async=!0,e.src=("https:"==document.location.protocol?"https://":"http://")+"dc8na2hxrj29i.cloudfront.net/code/keen-2.1.0-min.js";var t=document.getElementsByTagName("script")[0];t.parentNode.insertBefore(e,t)})();
 
     // Configure the Keen object with your Project ID and (optional) access keys.
     Keen.configure({
-      projectId: "510ae487a136b03d10000005",
-      writeKey: "38db12600b44fbbdb6e987c6d8af7f1797d01d25b67c1f79823d31bcc71f347d8d896aebcb257b8966347e1d5a2eca356e8894ad1c9f634dbc2a94f79804ab99acfb7cf1f19a70301f85479df4b3ddce7895ee072e1726723c01652f63b5591cb22603a280ab8dcd8d64fc4acb862b03", // required for sending events
+      projectId: "5377805cd97b857fed00003f",
+      writeKey: "ff8524f490858be55baffe6f49869d6829e61e9d3d5906fd8a55a6487394c6bb169a1af80cd34712eedbd301ef38b25bbbd2e69eb5933be660e07553736bf98bd6e287ae02e30a5bb4031a4bc0ede1b3", // required for sending events
     });
 </script>
+
+    <script id="tabs.html" type="text/ng-template">
+    <!-- 
+      Create tabs with an icon and label, using the tabs-positive style. 
+      Each tab's child <ion-nav-view> directive will have its own 
+      navigation history that also transitions its views in and out.
+    -->
+    <ion-tabs class="tabs-icon-top">
+
+
+      <!-- Pets Tab -->
+      <ion-tab title="Dashboard" icon="icon ion-home" href="#/tab/dash">
+        <ion-nav-view name="tab-dash"></ion-nav-view>
+      </ion-tab>
+
+
+      <!-- Adopt Tab -->
+      <ion-tab title="Friends" icon="icon ion-heart" href="#/tab/friends">
+        <ion-nav-view name="tab-friends"></ion-nav-view>
+      </ion-tab>
+
+
+      <!-- About Tab -->
+      <ion-tab title="Account" icon="icon ion-gear-b" href="#/tab/account">
+        <ion-nav-view name="tab-account"></ion-nav-view>
+      </ion-tab>
+
+
+    </ion-tabs>
+    </script>
+    <script id="dash.html" type="text/ng-template">
+      <button class="button button-primary">Tap</button>
+    </script>
+    <script id="friend.html" type="text/ng-template">
+      <button class="button button-primary">Tap</button>
+    </script>
+    <script id="friends.html" type="text/ng-template">
+      <button class="button button-primary">Tap</button>
+    </script>
+    <script id="account.html" type="text/ng-template">
+      <button class="button button-primary">Tap</button>
+    </script>
+
     <script>
       angular.module('myApp', ['ionic', 'ionic.services.analytics', 'ionic.services.common'])
 
+      .run(function($ionicPlatform) {
+        $ionicPlatform.ready(function() {
+          // Hide the accessory bar by default (remove this to show the accessory bar above the keyboard
+          // for form inputs)
+          if(window.cordova && window.cordova.plugins.Keyboard) {
+            cordova.plugins.Keyboard.hideKeyboardAccessoryBar(true);
+          }
+          if(window.StatusBar) {
+            // org.apache.cordova.statusbar required
+            StatusBar.styleDefault();
+          }
+        });
+      })
+
+      .config(function($stateProvider, $urlRouterProvider) {
+
+        // Ionic uses AngularUI Router which uses the concept of states
+        // Learn more here: https://github.com/angular-ui/ui-router
+        // Set up the various states which the app can be in.
+        // Each state's controller can be found in controllers.js
+        $stateProvider
+
+          // setup an abstract state for the tabs directive
+          .state('tab', {
+            url: "/tab",
+            abstract: true,
+            templateUrl: "tabs.html"
+          })
+
+          // Each tab has its own nav history stack:
+
+          .state('tab.dash', {
+            url: '/dash',
+            views: {
+              'tab-dash': {
+                templateUrl: 'dash.html'
+              }
+            }
+          })
+
+          .state('tab.friends', {
+            url: '/friends',
+            views: {
+              'tab-friends': {
+                templateUrl: 'friends.html'
+              }
+            }
+          })
+          .state('tab.friend-detail', {
+            url: '/friend/:friendId',
+            views: {
+              'tab-friends': {
+                templateUrl: 'friend.html'
+              }
+            }
+          })
+
+          .state('tab.account', {
+            url: '/account',
+            views: {
+              'tab-account': {
+                templateUrl: 'account.html'
+              }
+            }
+          })
+
+        // if none of the above states are matched, use this as the fallback
+        $urlRouterProvider.otherwise('/tab/dash');
+
+      })
+
+      
       .config(['$ionicAppProvider', function($ionicAppProvider) {
         $ionicAppProvider.identify({
           app_id: 'asdf'
