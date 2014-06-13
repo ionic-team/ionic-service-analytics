@@ -73,6 +73,21 @@ angular.module('ionic.services.analytics', ['ionic.services.common'])
   });
 }])
 
+.factory('$ionicUser', [
+  '$q',
+  '$timeout',
+function($q, $timeout) {
+  var user;
+
+  return {
+    identify: function(userData) {
+      user = userData;
+    },
+    get: function() {
+      return user;
+    }
+  }
+}])
 
 /**
  * @ngdoc service
@@ -97,7 +112,13 @@ angular.module('ionic.services.analytics', ['ionic.services.common'])
  * });
  * ```
  */
-.factory('$ionicTrack', ['$q', '$timeout', '$state', '$ionicApp', function($q, $timeout, $state, $ionicApp) {
+.factory('$ionicTrack', [
+  '$q',
+  '$timeout',
+  '$state',
+  '$ionicApp',
+  '$ionicUser',
+function($q, $timeout, $state, $ionicApp, $ionicUser) {
   var _types = [];
 
   return {
@@ -122,12 +143,23 @@ angular.module('ionic.services.analytics', ['ionic.services.common'])
 
       var app = $ionicApp.getApp();
 
+      var user;
+
       console.log("Current state:", $state.current.name);
 
       data = angular.extend(data, {
         activeState: $state.current.name,
         _app: app
       });
+
+      user = $ionicUser.get();
+
+      if(user) {
+        data = angular.extend(data, {
+          user: user
+        });
+      }
+      console.trace();
 
       $timeout(function() {
         console.log('Sending', {
@@ -157,8 +189,11 @@ angular.module('ionic.services.analytics', ['ionic.services.common'])
         },
         data: data
       });
-    }
+    },
 
+    identify: function(userData) {
+      $ionicUser.identify(userData);
+    }
   }
 }])
 
@@ -226,7 +261,7 @@ angular.module('ionic.services.analytics', ['ionic.services.common'])
   return {
     restrict: 'A',
     link: function($scope, $element, $attr) {
-      $document.on('click', function(e) {
+      $document.on('click', function(event) {
         var i, j, type, _types = $ionicTrack.getTypes();
         for(i = 0, j = _types.length; i < j; i++) {
           type = _types[i];
@@ -234,6 +269,8 @@ angular.module('ionic.services.analytics', ['ionic.services.common'])
             return false;
           }
         }
+
+        $ionicTrack.trackClick(event.pageX, event.pageY, {});
       });
     }
   }

@@ -33,7 +33,7 @@
     // Configure the Keen object with your Project ID and (optional) access keys.
     Keen.configure({
       projectId: "5377805cd97b857fed00003f",
-      writeKey: "ff8524f490858be55baffe6f49869d6829e61e9d3d5906fd8a55a6487394c6bb169a1af80cd34712eedbd301ef38b25bbbd2e69eb5933be660e07553736bf98bd6e287ae02e30a5bb4031a4bc0ede1b3", // required for sending events
+      writeKey: "c751ed888fe2688d67e58462ca3ee4c2fba4a0185da6112bd9689281cee7c03439b9478a1fb5445c3db788f69867fb91f19a98f15715e335eebd4e992078c4e16b657866e6b13b74c11a683c3aa07f3da988ef731379352b06882d831ca64c24c546ceee5ce337127b608db73d1fb8f4", // required for sending events
     });
 </script>
 
@@ -156,12 +156,17 @@
       
       .config(['$ionicAppProvider', function($ionicAppProvider) {
         $ionicAppProvider.identify({
-          app_id: 'asdf'
+          app_id: 'bea9e753d864'
         });
       }])
 
       .controller('MyCtrl', function($ionicTrack, $scope) {
         $scope.name = 'Max';
+        $ionicTrack.identify({
+          user_id: '99',
+          name: 'Max Lynch',
+          email: 'max@drifty.com'
+        });
         $ionicTrack.track('Load').then(function(resp) {
           console.log(resp);
         });
