@@ -24,6 +24,48 @@ angular.module('ionic.services.analytics', ['ionic.services.common'])
   }
 })
 
+.factory('xPathUtil', function() {
+  function getElementTreeXPath(element) {
+    var paths = [];
+
+    // Use nodeName (instead of localName) so namespace prefix is included (if any).
+    for (; element && element.nodeType == 1; element = element.parentNode)
+    {
+      var index = 0;
+      for (var sibling = element.previousSibling; sibling; sibling = sibling.previousSibling)
+      {
+        // Ignore document type declaration.
+        if (sibling.nodeType == Node.DOCUMENT_TYPE_NODE)
+          continue;
+
+        if (sibling.nodeName == element.nodeName)
+          ++index;
+      }
+
+      var tagName = element.nodeName.toLowerCase();
+      var pathIndex = (index ? "[" + (index+1) + "]" : "");
+      paths.splice(0, 0, tagName + pathIndex);
+    }
+
+    return paths.length ? "/" + paths.join("/") : null;
+  };
+
+  return {
+    getElementXPath: function(element) {
+      // Code appropriated from open source project FireBug
+      if (element && element.id)
+        return '//*[@id="' + element.id + '"]';
+      else
+        return getElementTreeXPath(element);
+    };
+
+    getElementByXPath: function(path, context) {
+      var xResult = document.evaluate(path, context || document);
+      return xResult.iteratorNext();
+    }
+  }
+})
+
 /**
  * @private
  * When the app runs, add some heuristics to track for UI events.
