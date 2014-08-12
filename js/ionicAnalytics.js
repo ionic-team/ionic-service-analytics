@@ -149,7 +149,7 @@ function($q, $timeout) {
  * });
  *
  * // Click tracking
- * $ionicTrack.trackClick(x, y, {
+ * $ionicTrack.trackClick(x, y, button, {
  *   thing: 'button'
  * });
  * ```
@@ -160,7 +160,8 @@ function($q, $timeout) {
   '$state',
   '$ionicApp',
   '$ionicUser',
-function($q, $timeout, $state, $ionicApp, $ionicUser) {
+  'xPathUtil',
+function($q, $timeout, $state, $ionicApp, $ionicUser, xPathUtil) {
   var _types = [];
 
   return {
@@ -223,12 +224,23 @@ function($q, $timeout, $state, $ionicApp, $ionicUser) {
       });
     },
 
-    trackClick: function(x, y, data) {
+    trackClick: function(x, y, target, data) {
+      // We want to send coordinates as a percentage relative to the target element
+      var box = target.getBoundingClientRect();
+      var width = box.right - box.left,
+          height = box.bottom - box.top;
+      x = (x - box.left) / width;
+      y = (y - box.top) / height;
+
+      // Now get an xpath reference to the target element
+      var xPath = xPathUtil.getElementXPath(target);
+
       return this.send('tap', {
         coords: {
           x: x,
           y: y
         },
+        element: xPath,
         data: data
       });
     },
@@ -312,7 +324,7 @@ function($q, $timeout, $state, $ionicApp, $ionicUser) {
           }
         }
 
-        $ionicTrack.trackClick(event.pageX, event.pageY, {});
+        $ionicTrack.trackClick(event.pageX, event.pageY, event.target, {});
       });
     }
   }

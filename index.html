@@ -12,7 +12,7 @@
     <script src="js/ionicAnalytics.js"></script>
   </head>
   <body ng-app="myApp" ng-controller="MyCtrl" ion-track-auto>
-    <!-- 
+    <!--
       The nav bar that will be updated as we navigate between views.
     -->
     <ion-nav-bar class="bar-stable nav-title-slide-ios7">
@@ -20,7 +20,7 @@
         Back
       </ion-nav-back-button>
     </ion-nav-bar>
-    <!-- 
+    <!--
       The views will be rendered in the <ion-nav-view> directive below
       Templates are in the /templates folder (but you could also
       have templates inline in this html file if you'd like).
@@ -38,9 +38,9 @@
 </script>
 
     <script id="tabs.html" type="text/ng-template">
-    <!-- 
-      Create tabs with an icon and label, using the tabs-positive style. 
-      Each tab's child <ion-nav-view> directive will have its own 
+    <!--
+      Create tabs with an icon and label, using the tabs-positive style.
+      Each tab's child <ion-nav-view> directive will have its own
       navigation history that also transitions its views in and out.
     -->
     <ion-tabs class="tabs-icon-top">
@@ -67,16 +67,37 @@
     </ion-tabs>
     </script>
     <script id="dash.html" type="text/ng-template">
-      <button class="button button-primary">Tap</button>
+      <ion-view title="Dashboard">
+        <ion-content class="has-header padding">
+          <h1>Dash</h1>
+        </ion-content>
+      </ion-view>
     </script>
     <script id="friend.html" type="text/ng-template">
-      <button class="button button-primary">Tap</button>
+      <ion-view title="{{friend.name}}">
+        <ion-content has-header="true" padding="true">
+        </ion-content>
+      </ion-view>
     </script>
     <script id="friends.html" type="text/ng-template">
-      <button class="button button-primary">Tap</button>
+      <ion-view>
+        <ion-content>
+          <ion-list>
+            <ion-item ng-repeat="friend in friends" type="item-text-wrap" href="#/tab/friend/{{friend.id}}">
+              {{friend.name}}
+            </ion-item>
+          </ion-list>
+          <button class="button button-primary">Tap</button>
+        </ion-content>
+      </ion-view>
     </script>
     <script id="account.html" type="text/ng-template">
-      <button class="button button-primary">Tap</button>
+      <ion-view>
+        <ion-content>
+          <h1>Account</h1>
+          <button class="button button-primary">Tap</button>
+        </ion-content>
+      </ion-view>
     </script>
 
     <script>
@@ -153,7 +174,7 @@
 
       })
 
-      
+
       .config(['$ionicAppProvider', function($ionicAppProvider) {
         $ionicAppProvider.identify({
           app_id: 'bea9e753d864'
@@ -161,6 +182,14 @@
       }])
 
       .controller('MyCtrl', function($ionicTrack, $scope) {
+        $scope.friends = [
+          { id: 0, name: 'Scruff McGruff' },
+          { id: 1, name: 'G.I. Joe' },
+          { id: 2, name: 'Miss Frizzle' },
+          { id: 3, name: 'Ash Ketchum' }
+        ];
+
+
         $scope.name = 'Max';
         $ionicTrack.identify({
           user_id: '99',
