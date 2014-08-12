@@ -25,7 +25,7 @@ angular.module('ionic.services.analytics', ['ionic.services.common'])
 })
 
 .factory('xPathUtil', function() {
-  function getElementTreeXPath(element) {
+  var getElementTreeXPath = function(element) {
     var paths = [];
 
     // Use nodeName (instead of localName) so namespace prefix is included (if any).
@@ -48,7 +48,7 @@ angular.module('ionic.services.analytics', ['ionic.services.common'])
     }
 
     return paths.length ? "/" + paths.join("/") : null;
-  };
+  }
 
   return {
     getElementXPath: function(element) {
@@ -57,11 +57,11 @@ angular.module('ionic.services.analytics', ['ionic.services.common'])
         return '//*[@id="' + element.id + '"]';
       else
         return getElementTreeXPath(element);
-    };
+    },
 
     getElementByXPath: function(path, context) {
       var xResult = document.evaluate(path, context || document);
-      return xResult.iteratorNext();
+      return xResult.iterateNext();
     }
   }
 })
