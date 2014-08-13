@@ -7,21 +7,35 @@ angular.module('ionic.services.analytics', ['ionic.services.common'])
  * useful scope data.
  */
 .factory('scopeClean', function() {
-  return function(scope) {
-    var obj = {};
-    for(var i in scope) {
-      if(i === 'constructor' || i === 'this') {
+  var clean = function(scope) {
+    // Make a container object to store all our cloned properties
+    var cleaned = angular.isArray(scope) ? [] : {};
+
+    for (var key in scope) {
+      // Check that the property isn't inherited
+      if (!scope.hasOwnProperty(key))
+        continue;
+
+      var val = scope[key];
+
+      // Filter out bad property names / values
+      if (key === 'constructor' || key === 'this' ||
+          typeof val === 'function' ||
+          key.indexOf('$') != -1 ) {
         continue;
       }
-      if(typeof scope[i] === 'function') {
-        continue;
-      }
-      if(i.indexOf('$') == -1) {
-        obj[i] = scope[i];
+
+      // Recurse if we're looking at an object or array
+      if (typeof val === 'object') {
+        cleaned[key] = clean(val);
+      } else {
+        // Otherwise just pop it onto the cleaned object
+        cleaned[key] = val;
       }
     }
-    return obj;
+    return cleaned;
   }
+  return clean;
 })
 
 .factory('xPathUtil', function() {
@@ -225,17 +239,21 @@ function($q, $timeout, $state, $ionicApp, $ionicUser, xPathUtil) {
     },
 
     trackClick: function(x, y, target, data) {
-      // We want to send coordinates as a percentage relative to the target element
+      // We want to also include coordinates as a percentage relative to the target element
       var box = target.getBoundingClientRect();
       var width = box.right - box.left,
           height = box.bottom - box.top;
-      x = (x - box.left) / width;
-      y = (y - box.top) / height;
+      var normX = (x - box.left) / width,
+          normY = (y - box.top) / height;
 
       // Now get an xpath reference to the target element
       var xPath = xPathUtil.getElementXPath(target);
 
       return this.send('tap', {
+        normCoords: {
+          x: normX,
+          y: normY
+        },
         coords: {
           x: x,
           y: y
