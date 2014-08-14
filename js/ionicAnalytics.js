@@ -94,12 +94,7 @@ angular.module('ionic.services.analytics', ['ionic.services.common'])
         return;
       }
       var data = {};
-      $ionicTrack.send('tap', {
-        coords: {
-          x: event.pageX,
-          y: event.pageY
-        }
-      });
+      $ionicTrack.trackClick(event.pageX, event.pageY, event.target);
     }
   });
 
@@ -117,14 +112,9 @@ angular.module('ionic.services.analytics', ['ionic.services.common'])
 
       var itemScope = angular.element(item).scope();
 
-      $ionicTrack.send('tap', {
-        type: 'tab-item',
-        scope: scopeClean(itemScope),
-        coords: {
-          x: event.pageX,
-          y: event.pageY
-        }
-      });
+      $ionicTrack.trackClick(event.pageX, event.pageY, event.target, {
+        scope: scopeClean(itemScope)
+      })
     }
   });
 }])
@@ -291,9 +281,8 @@ function($q, $timeout, $state, $ionicApp, $ionicUser, xPathUtil) {
     restrict: 'A',
     link: function($scope, $element, $attr) {
       var eventName = $attr.ionTrackEvent;
-      $element.bind('click', function(e) {
-        $ionicTrack.trackClick(e.pageX, e.pageY, {
-          target: e.target,
+      $element.on('click', function(e) {
+        $ionicTrack.trackClick(e.pageX, e.pageY, e.target, {
           scope: scopeClean(angular.element(e.target).scope())
         });
       });
@@ -320,7 +309,7 @@ function($q, $timeout, $state, $ionicApp, $ionicUser, xPathUtil) {
  * <body ion-track-auto></body>
  * ```
  */
-.directive('ionTrackAuto', ['$document', '$ionicTrack', 'scopeClean', function($document, $ionicTrack, scopeClean) {
+.directive('ionTrackAuto', ['$document', '$ionicTrack', 'scopeClean', '$state', function($document, $ionicTrack, scopeClean, $state) {
   var getType = function(e) {
     if(e.target.classList) {
       var cl = e.target.classList;
@@ -334,14 +323,19 @@ function($q, $timeout, $state, $ionicApp, $ionicUser, xPathUtil) {
     restrict: 'A',
     link: function($scope, $element, $attr) {
       $document.on('click', function(event) {
+        // Send the click event through each of our handlers
         var i, j, type, _types = $ionicTrack.getTypes();
         for(i = 0, j = _types.length; i < j; i++) {
           type = _types[i];
+
+          // Cancel event propogation if any handler wants us to
           if(type.handle(event) === false) {
             return false;
           }
         }
 
+        // Also always send the event as a tap event
+        // Remove this if sending an event per tap is a bit much
         $ionicTrack.trackClick(event.pageX, event.pageY, event.target, {});
       });
     }
