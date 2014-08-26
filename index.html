@@ -10,6 +10,7 @@
 
     <script src="../ionic-service-common/identity/ionicApp.js"></script>
     <script src="js/ionicAnalytics.js"></script>
+    <script src="https://d26b395fwzu5fz.cloudfront.net/3.0.7/keen-tracker.min.js"></script>
   </head>
   <body ng-app="myApp" ng-controller="MyCtrl" ion-track-auto>
     <!--
@@ -26,16 +27,6 @@
       have templates inline in this html file if you'd like).
     -->
     <ion-nav-view></ion-nav-view>
-
-    <script type="text/javascript">
-    var Keen=Keen||{configure:function(e){this._cf=e},addEvent:function(e,t,n,i){this._eq=this._eq||[],this._eq.push([e,t,n,i])},setGlobalProperties:function(e){this._gp=e},onChartsReady:function(e){this._ocrq=this._ocrq||[],this._ocrq.push(e)}};(function(){var e=document.createElement("script");e.type="text/javascript",e.async=!0,e.src=("https:"==document.location.protocol?"https://":"http://")+"dc8na2hxrj29i.cloudfront.net/code/keen-2.1.0-min.js";var t=document.getElementsByTagName("script")[0];t.parentNode.insertBefore(e,t)})();
-
-    // Configure the Keen object with your Project ID and (optional) access keys.
-    Keen.configure({
-      projectId: "5377805cd97b857fed00003f",
-      writeKey: "c751ed888fe2688d67e58462ca3ee4c2fba4a0185da6112bd9689281cee7c03439b9478a1fb5445c3db788f69867fb91f19a98f15715e335eebd4e992078c4e16b657866e6b13b74c11a683c3aa07f3da988ef731379352b06882d831ca64c24c546ceee5ce337127b608db73d1fb8f4", // required for sending events
-    });
-</script>
 
     <script id="tabs.html" type="text/ng-template">
     <!--
@@ -174,10 +165,10 @@
 
       })
 
-
       .config(['$ionicAppProvider', function($ionicAppProvider) {
         $ionicAppProvider.identify({
-          app_id: 'bea9e753d864'
+          app_id: 'bea9e753d864',
+          write_key: '9ab46f9cf7f7d5411633d54c20cf720adcc98b58c028dadb6d1bc3150b7f39bebc0106eb023c1102f72a087ebe01cd7d0e2edbad4a00d8eb40950915e92363a3e0702c1e47adb05e8fda92f3703f8a2c85ef58abafe60cd6028bf7f48f831a84b403f46b63efb83d02e6ec7dd57ace14d61021addbb3ecef07303226f1025f3163a84e4c1ef2cbe74784b1548786cce3b4cba7c68e537b3122be8834d4346f232ab61ab773bd72c05fbadb68b5cf51d6'
         });
       }])
 
@@ -194,9 +185,6 @@
           user_id: '99',
           name: 'Max Lynch',
           email: 'max@drifty.com'
-        });
-        $ionicTrack.track('Load').then(function(resp) {
-          console.log(resp);
         });
       });
     </script>

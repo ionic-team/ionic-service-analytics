@@ -87,8 +87,6 @@ angular.module('ionic.services.analytics', ['ionic.services.common'])
 .run(['$ionicTrack', 'scopeClean', function($ionicTrack, scopeClean) {
   $ionicTrack.addType({
     name: 'button',
-    shouldHandle: function(event) {
-    },
     handle: function(event, data) {
       if(!event.type === 'click' || !event.target || !event.target.classList.contains('button')) {
         return;
@@ -137,6 +135,35 @@ function($q, $timeout) {
 
 /**
  * @ngdoc service
+ * @name keen
+ * @module ionic.services.analytics
+ * @description
+ *
+ * A wrapper for our analytics backend. You shouldn't need to mess around with this.
+ */
+.factory('keen', ['$ionicApp', function($ionicApp) {
+  // Figure out auth info
+  var PROJECT_ID = "5377805cd97b857fed00003f";
+  var app = $ionicApp.getApp();
+
+  // Configure the Keen object with your Project ID and (optional) access keys.
+  var keenClient = new Keen({
+    projectId: PROJECT_ID,
+    writeKey: app.write_key,
+  })
+
+  // Wrap Keen in an object so we can keep our own API consistent even if Keen changes
+  return {
+    addEvent: function(eventName, data) {
+      // Prefix the event collection with our app id before sending
+      eventName = app.app_id + '-' + eventName;
+      keenClient.addEvent(eventName, data);
+    }
+  }
+}])
+
+/**
+ * @ngdoc service
  * @name $ionicTrack
  * @module ionic.services.analytics
  * @description
@@ -165,7 +192,8 @@ function($q, $timeout) {
   '$ionicApp',
   '$ionicUser',
   'xPathUtil',
-function($q, $timeout, $state, $ionicApp, $ionicUser, xPathUtil) {
+  'keen',
+function($q, $timeout, $state, $ionicApp, $ionicUser, xPathUtil, keen) {
   var _types = [];
 
   return {
@@ -175,21 +203,9 @@ function($q, $timeout, $state, $ionicApp, $ionicUser, xPathUtil) {
     getTypes: function() {
       return _types;
     },
-    getType: function(event) {
-      var i, j, type;
-      for(i = 0, j = _types.length; i < j; i++) {
-        type = _types[i];
-        if(type.shouldHandle(event)) {
-          return type;
-        }
-      }
-      return null;
-    },
-    send: function(eventName, data) {
+    _send: function(eventName, data) {
       var q = $q.defer();
-
       var app = $ionicApp.getApp();
-
       var user;
 
       console.log("Current state:", $state.current.name);
@@ -213,7 +229,7 @@ function($q, $timeout, $state, $ionicApp, $ionicUser, xPathUtil) {
           'status': 'sent',
           'message': data
         });
-        Keen.addEvent(eventName, data);
+        keen.addEvent(eventName, data);
         q.resolve({
           'status': 'sent',
           'message': data
@@ -223,7 +239,7 @@ function($q, $timeout, $state, $ionicApp, $ionicUser, xPathUtil) {
       return q.promise;
     },
     track: function(eventName, data) {
-      return this.send(eventName, {
+      return this._send(eventName, {
         data: data
       });
     },
@@ -239,7 +255,7 @@ function($q, $timeout, $state, $ionicApp, $ionicUser, xPathUtil) {
       // Now get an xpath reference to the target element
       var xPath = xPathUtil.getElementXPath(target);
 
-      return this.send('tap', {
+      return this._send('tap', {
         normCoords: {
           x: normX,
           y: normY
@@ -268,7 +284,7 @@ function($q, $timeout, $state, $ionicApp, $ionicUser, xPathUtil) {
  *
  * @description
  *
- * A convenient directive to automatically track a click/tap on a button
+ * A convenient directive to automatically track a click/tap on  abutton
  * or other tappable element.
  *
  * @usage
@@ -309,7 +325,7 @@ function($q, $timeout, $state, $ionicApp, $ionicUser, xPathUtil) {
  * <body ion-track-auto></body>
  * ```
  */
-.directive('ionTrackAuto', ['$document', '$ionicTrack', 'scopeClean', '$state', function($document, $ionicTrack, scopeClean, $state) {
+.directive('ionTrackAuto', ['$document', '$ionicTrack', 'scopeClean', function($document, $ionicTrack, scopeClean) {
   var getType = function(e) {
     if(e.target.classList) {
       var cl = e.target.classList;
@@ -324,9 +340,10 @@ function($q, $timeout, $state, $ionicApp, $ionicUser, xPathUtil) {
     link: function($scope, $element, $attr) {
       $document.on('click', function(event) {
         // Send the click event through each of our handlers
-        var i, j, type, _types = $ionicTrack.getTypes();
-        for(i = 0, j = _types.length; i < j; i++) {
-          type = _types[i];
+        var i, j, type;
+        var types = $ionicTrack.getTypes();
+        for(i = 0, j = types.length; i < j; i++) {
+          type = types[i];
 
           // Cancel event propogation if any handler wants us to
           if(type.handle(event) === false) {
@@ -334,9 +351,33 @@ function($q, $timeout, $state, $ionicApp, $ionicUser, xPathUtil) {
           }
         }
 
-        // Also always send the event as a tap event
-        // Remove this if sending an event per tap is a bit much
-        $ionicTrack.trackClick(event.pageX, event.pageY, event.target, {});
+        // // Also always send the event as a tap event
+        // // Remove this if sending an event per tap is a bit much
+        // $ionicTrack.trackClick(event.pageX, event.pageY, event.target, {});
+      });
+
+      // Wait for the deviceready event as phonegap recommends
+      // This will have the side-effect of only registering these listeners on an actual device
+      $document.on('deviceready', function() {
+        // Send a load event with a bunch of device-specific parameters
+        // - Location, OS, ionic version, app version, device dimensions, etc.
+        // These will be tied to our user? Should we send them in every event?
+
+        $ionicTrack.track('load');
+
+        $document.on('pause', function(event) {
+          // Pause event is called whenever the user minimizes their app
+
+          // TODO investigate whether this works in iOS,
+          // see http://docs.phonegap.com/en/3.5.0/cordova_events_events.md.html#pause
+
+          $ionicTrack._send('pause', {});
+        });
+
+        $document.on('resume', function(event) {
+          // Called when the user resumes the app after a pause event
+          $ionicTrack._send('resume', {});
+        });
       });
     }
   }
