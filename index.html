@@ -10,7 +10,7 @@
 
     <script src="../ionic-service-common/identity/ionicApp.js"></script>
     <script src="js/ionicAnalytics.js"></script>
-    <script src="https://d26b395fwzu5fz.cloudfront.net/3.0.7/keen-tracker.min.js"></script>
+    <!-- <script src="https://d26b395fwzu5fz.cloudfront.net/3.0.7/keen-tracker.min.js"></script> -->
   </head>
   <body ng-app="myApp" ng-controller="MyCtrl" ion-track-auto>
     <!--
@@ -167,8 +167,8 @@
 
       .config(['$ionicAppProvider', function($ionicAppProvider) {
         $ionicAppProvider.identify({
-          app_id: 'bea9e753d864',
-          write_key: '9ab46f9cf7f7d5411633d54c20cf720adcc98b58c028dadb6d1bc3150b7f39bebc0106eb023c1102f72a087ebe01cd7d0e2edbad4a00d8eb40950915e92363a3e0702c1e47adb05e8fda92f3703f8a2c85ef58abafe60cd6028bf7f48f831a84b403f46b63efb83d02e6ec7dd57ace14d61021addbb3ecef07303226f1025f3163a84e4c1ef2cbe74784b1548786cce3b4cba7c68e537b3122be8834d4346f232ab61ab773bd72c05fbadb68b5cf51d6'
+          app_id: '8e6d41df',
+          write_key: '9819dc7f43d365c861bdd51a6630e443886cae5475ca779ab7da553cdc52a1b31ae01c1cc354dcc4a255019770efc233f1ff8054dddcce6fd16fedf2a5e8990d4d50cd4d961b39c6eacabc8958b942923fcfbab48a72b422ea12ecc7a7bcca2b134d587fc8783ad1f1b96fde85e449eaacd8e674a924d55581d44133ef04dc92f7244e1febe9c37a67958f83907f0a5b'
         });
       }])
 
@@ -182,7 +182,6 @@
 
         $scope.name = 'Max';
         $ionicTrack.identify({
-          user_id: '99',
           name: 'Max Lynch',
           email: 'max@drifty.com'
         });

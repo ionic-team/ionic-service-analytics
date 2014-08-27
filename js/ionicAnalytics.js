@@ -120,12 +120,62 @@ angular.module('ionic.services.analytics', ['ionic.services.common'])
 .factory('$ionicUser', [
   '$q',
   '$timeout',
-function($q, $timeout) {
-  var user;
+  '$window',
+function($q, $timeout, $window) {
+  // Some crazy bit-twiddling to generate a random guid
+  function generateGuid() {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        var r = Math.random()*16|0, v = c == 'x' ? r : (r&0x3|0x8);
+        return v.toString(16);
+    });
+  }
+
+  function storeObject(objectName, object) {
+    // Convert object to JSON and store in localStorage
+    var jsonObj = JSON.stringify(object);
+    $window.localStorage.setItem(objectName, jsonObj);
+  }
+
+  function getObject(objectName) {
+    // Deserialize the object from JSON and return
+    var jsonObj = $window.localStorage.getItem(objectName);
+    if (jsonObj == null) { // null or undefined, return null
+      return null;
+    }
+    try {
+      return JSON.parse(jsonObj);
+    } catch (err) {
+      return null;
+    }
+  }
+
+  // User object we'll use to store all our user info
+  var storedUser = getObject('user');
+  var user = storedUser || {};
+
+  // Generate a device and user ids if we don't have them already
+  var isUserDirty = false;
+  if (!user.user_id) {
+    user.user_id = generateGuid();
+    isUserDirty = true;
+  }
+  if (!user.device_id) {
+    user.device_id = generateGuid();
+    isUserDirty = true;
+  }
+
+  // Write to local storage if we changed anything on our user object
+  if (isUserDirty) {
+    storeObject('user', user);
+  }
 
   return {
     identify: function(userData) {
-      user = userData;
+      // Copy all the data into our user object
+      angular.extend(user, userData);
+
+      // Write the user object to our local storage
+      storeObject('user', user);
     },
     get: function() {
       return user;
@@ -141,15 +191,40 @@ function($q, $timeout) {
  *
  * A wrapper for our analytics backend. You shouldn't need to mess around with this.
  */
-.factory('keen', ['$ionicApp', function($ionicApp) {
+.factory('keen', ['$ionicApp', '$window', function($ionicApp, $window) {
   // Figure out auth info
   var PROJECT_ID = "5377805cd97b857fed00003f";
   var app = $ionicApp.getApp();
 
+  // Async load keen from the (minified) script from their website
+  ! function(a, b) {
+    if (void 0 === b[a]) {
+      b["_" + a] = {}, b[a] = function(c) {
+        b["_" + a].clients = b["_" + a].clients || {}, b["_" + a].clients[c.projectId] = this, this._config = c
+      }, b[a].ready = function(c) {
+        b["_" + a].ready = b["_" + a].ready || [], b["_" + a].ready.push(c)
+      };
+      for (var c = ["addEvent", "setGlobalProperties", "trackExternalLink", "on"], d = 0; d < c.length; d++) {
+        var e = c[d],
+          f = function(a) {
+            return function() {
+              return this["_" + a] = this["_" + a] || [], this["_" + a].push(arguments), this
+            }
+          };
+        b[a].prototype[e] = f(e)
+      }
+      var g = document.createElement("script");
+      g.type = "text/javascript", g.async = !0, g.src = "https://d26b395fwzu5fz.cloudfront.net/3.0.7/keen.min.js";
+      var h = document.getElementsByTagName("script")[0];
+      h.parentNode.insertBefore(g, h)
+    }
+  }("Keen", $window);
+
   // Configure the Keen object with your Project ID and (optional) access keys.
-  var keenClient = new Keen({
+  var keenClient = new $window.Keen({
     projectId: PROJECT_ID,
     writeKey: app.write_key,
+    readKey: app.read_key
   })
 
   // Wrap Keen in an object so we can keep our own API consistent even if Keen changes
@@ -204,18 +279,20 @@ function($q, $timeout, $state, $ionicApp, $ionicUser, xPathUtil, keen) {
       return _types;
     },
     _send: function(eventName, data) {
-      var q = $q.defer();
-      var app = $ionicApp.getApp();
-      var user;
+      var deferred = $q.defer();
+      // Copy objects so we can add / remove properties without affecting the original
+      var app = angular.copy($ionicApp.getApp());
+      var user = angular.copy($ionicUser.get());
 
-      console.log("Current state:", $state.current.name);
+      // Don't expose api keys, etc if we don't have to
+      delete app.write_key;
+      delete app.read_key;
 
+      // Add user tracking data to everything sent to keen
       data = angular.extend(data, {
         activeState: $state.current.name,
         _app: app
       });
-
-      user = $ionicUser.get();
 
       if(user) {
         data = angular.extend(data, {
@@ -230,13 +307,13 @@ function($q, $timeout, $state, $ionicApp, $ionicUser, xPathUtil, keen) {
           'message': data
         });
         keen.addEvent(eventName, data);
-        q.resolve({
+        deferred.resolve({
           'status': 'sent',
           'message': data
         });
       });
 
-      return q.promise;
+      return deferred.promise;
     },
     track: function(eventName, data) {
       return this._send(eventName, {
@@ -358,7 +435,7 @@ function($q, $timeout, $state, $ionicApp, $ionicUser, xPathUtil, keen) {
 
       // Wait for the deviceready event as phonegap recommends
       // This will have the side-effect of only registering these listeners on an actual device
-      $document.on('deviceready', function() {
+      // $document.on('deviceready', function() {
         // Send a load event with a bunch of device-specific parameters
         // - Location, OS, ionic version, app version, device dimensions, etc.
         // These will be tied to our user? Should we send them in every event?
@@ -378,7 +455,7 @@ function($q, $timeout, $state, $ionicApp, $ionicUser, xPathUtil, keen) {
           // Called when the user resumes the app after a pause event
           $ionicTrack._send('resume', {});
         });
-      });
+      // });
     }
   }
 }])
