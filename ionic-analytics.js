@@ -3631,7 +3631,7 @@ function($q, $timeout, $state, $ionicApp, $ionicUser, $ionicAnalytics) {
           'status': 'sent',
           'message': data
         });
-        $ionicAnalytics.getClient().addEvent(eventName, data);
+        $ionicAnalytics.getClient().addEvent(app.app_id + '-' + eventName, data);
         q.resolve({
           'status': 'sent',
           'message': data
