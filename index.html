@@ -9,7 +9,7 @@
     <script src="../ionic/dist/js/ionic.bundle.js"></script>
 
     <script src="../ionic-service-common/ionicCore.js"></script>
-    <script src="js/ionicAnalytics.js"></script>
+    <script src="ionic-analytics.js"></script>
   </head>
   <body ng-app="myApp" ng-controller="MyCtrl" ion-track-auto>
     <!-- 
@@ -26,16 +26,6 @@
       have templates inline in this html file if you'd like).
     -->
     <ion-nav-view></ion-nav-view>
-
-    <script type="text/javascript">
-    var Keen=Keen||{configure:function(e){this._cf=e},addEvent:function(e,t,n,i){this._eq=this._eq||[],this._eq.push([e,t,n,i])},setGlobalProperties:function(e){this._gp=e},onChartsReady:function(e){this._ocrq=this._ocrq||[],this._ocrq.push(e)}};(function(){var e=document.createElement("script");e.type="text/javascript",e.async=!0,e.src=("https:"==document.location.protocol?"https://":"http://")+"dc8na2hxrj29i.cloudfront.net/code/keen-2.1.0-min.js";var t=document.getElementsByTagName("script")[0];t.parentNode.insertBefore(e,t)})();
-
-    // Configure the Keen object with your Project ID and (optional) access keys.
-    Keen.configure({
-      projectId: "5377805cd97b857fed00003f",
-      writeKey: "c751ed888fe2688d67e58462ca3ee4c2fba4a0185da6112bd9689281cee7c03439b9478a1fb5445c3db788f69867fb91f19a98f15715e335eebd4e992078c4e16b657866e6b13b74c11a683c3aa07f3da988ef731379352b06882d831ca64c24c546ceee5ce337127b608db73d1fb8f4", // required for sending events
-    });
-</script>
 
     <script id="tabs.html" type="text/ng-template">
     <!-- 

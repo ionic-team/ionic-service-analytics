@@ -1,5 +1,24 @@
 angular.module('ionic.services.analytics', ['ionic.services.common'])
 
+
+.provider('$ionicAnalytics', function() {
+
+  var client = new Keen({
+    projectId: "5377805cd97b857fed00003f",
+    writeKey: "c751ed888fe2688d67e58462ca3ee4c2fba4a0185da6112bd9689281cee7c03439b9478a1fb5445c3db788f69867fb91f19a98f15715e335eebd4e992078c4e16b657866e6b13b74c11a683c3aa07f3da988ef731379352b06882d831ca64c24c546ceee5ce337127b608db73d1fb8f4",
+  });
+
+  return {
+    $get: [function() {
+      return {
+        getClient: function() {
+          return client;
+        }
+      }
+    }]
+  }
+})
+
 /**
  * @private
  * Clean a given scope (for sending scope data to the server for analytics purposes.
@@ -118,7 +137,8 @@ function($q, $timeout) {
   '$state',
   '$ionicApp',
   '$ionicUser',
-function($q, $timeout, $state, $ionicApp, $ionicUser) {
+  '$ionicAnalytics',
+function($q, $timeout, $state, $ionicApp, $ionicUser, $ionicAnalytics) {
   var _types = [];
 
   return {
@@ -166,7 +186,7 @@ function($q, $timeout, $state, $ionicApp, $ionicUser) {
           'status': 'sent',
           'message': data
         });
-        Keen.addEvent(eventName, data);
+        $ionicAnalytics.getClient().addEvent(eventName, data);
         q.resolve({
           'status': 'sent',
           'message': data
