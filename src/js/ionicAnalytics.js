@@ -1,6 +1,5 @@
 angular.module('ionic.services.analytics', ['ionic.services.common'])
 
-
 .provider('$ionicAnalytics', function() {
   return {
     $get: ['$ionicApp', function($ionicApp) {
@@ -18,6 +17,49 @@ angular.module('ionic.services.analytics', ['ionic.services.common'])
   }
 })
 
+.factory('xPathUtil', function() {
+  var getElementTreeXPath = function(element) {
+    var paths = [];
+
+    // Use nodeName (instead of localName) so namespace prefix is included (if any).
+    for (; element && element.nodeType == 1; element = element.parentNode)
+    {
+      var index = 0;
+      for (var sibling = element.previousSibling; sibling; sibling = sibling.previousSibling)
+      {
+        // Ignore document type declaration.
+        if (sibling.nodeType == Node.DOCUMENT_TYPE_NODE)
+          continue;
+
+        if (sibling.nodeName == element.nodeName)
+          ++index;
+      }
+
+      var tagName = element.nodeName.toLowerCase();
+      var pathIndex = (index ? "[" + (index+1) + "]" : "");
+      paths.splice(0, 0, tagName + pathIndex);
+    }
+
+    return paths.length ? "/" + paths.join("/") : null;
+  }
+
+  return {
+    getElementXPath: function(element) {
+      // Code appropriated from open source project FireBug
+      if (element && element.id)
+        return '//*[@id="' + element.id + '"]';
+      else
+        return getElementTreeXPath(element);
+    },
+
+    getElementByXPath: function(path, context) {
+      var xResult = document.evaluate(path, context || document);
+      return xResult.iterateNext();
+    }
+  }
+})
+
+
 /**
  * @private
  * Clean a given scope (for sending scope data to the server for analytics purposes.
@@ -25,21 +67,35 @@ angular.module('ionic.services.analytics', ['ionic.services.common'])
  * useful scope data.
  */
 .factory('scopeClean', function() {
-  return function(scope) {
-    var obj = {};
-    for(var i in scope) {
-      if(i === 'constructor' || i === 'this') {
+  var clean = function(scope) {
+    // Make a container object to store all our cloned properties
+    var cleaned = angular.isArray(scope) ? [] : {};
+
+    for (var key in scope) {
+      // Check that the property isn't inherited
+      if (!scope.hasOwnProperty(key))
+        continue;
+
+      var val = scope[key];
+
+      // Filter out bad property names / values
+      if (key === 'constructor' || key === 'this' ||
+          typeof val === 'function' ||
+          key.indexOf('$') != -1 ) {
         continue;
       }
-      if(typeof scope[i] === 'function') {
-        continue;
-      }
-      if(i.indexOf('$') == -1) {
-        obj[i] = scope[i];
+
+      // Recurse if we're looking at an object or array
+      if (typeof val === 'object') {
+        cleaned[key] = clean(val);
+      } else {
+        // Otherwise just pop it onto the cleaned object
+        cleaned[key] = val;
       }
     }
-    return obj;
+    return cleaned;
   }
+  return clean;
 })
 
 /**
@@ -55,13 +111,7 @@ angular.module('ionic.services.analytics', ['ionic.services.common'])
       if(!event.type === 'click' || !event.target || !event.target.classList.contains('button')) {
         return;
       }
-      var data = {};
-      $ionicTrack.send('tap', {
-        coords: {
-          x: event.pageX,
-          y: event.pageY
-        }
-      });
+      $ionicTrack.trackClick(event.pageX, event.pageY, event.target);
     }
   });
 
@@ -79,13 +129,8 @@ angular.module('ionic.services.analytics', ['ionic.services.common'])
 
       var itemScope = angular.element(item).scope();
 
-      $ionicTrack.send('tap', {
-        type: 'tab-item',
-        scope: scopeClean(itemScope),
-        coords: {
-          x: event.pageX,
-          y: event.pageY
-        }
+      $ionicTrack.trackClick(event.pageX, event.pageY, event.target, {
+        scope: scopeClean(itemScope)
       });
     }
   });
@@ -94,12 +139,62 @@ angular.module('ionic.services.analytics', ['ionic.services.common'])
 .factory('$ionicUser', [
   '$q',
   '$timeout',
-function($q, $timeout) {
-  var user;
+  '$window',
+function($q, $timeout, $window) {
+  // Some crazy bit-twiddling to generate a random guid
+  function generateGuid() {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        var r = Math.random()*16|0, v = c == 'x' ? r : (r&0x3|0x8);
+        return v.toString(16);
+    });
+  }
+
+  function storeObject(objectName, object) {
+    // Convert object to JSON and store in localStorage
+    var jsonObj = JSON.stringify(object);
+    $window.localStorage.setItem(objectName, jsonObj);
+  }
+
+  function getObject(objectName) {
+    // Deserialize the object from JSON and return
+    var jsonObj = $window.localStorage.getItem(objectName);
+    if (jsonObj == null) { // null or undefined, return null
+      return null;
+    }
+    try {
+      return JSON.parse(jsonObj);
+    } catch (err) {
+      return null;
+    }
+  }
+
+  // User object we'll use to store all our user info
+  var storedUser = getObject('user');
+  var user = storedUser || {};
+
+  // Generate a device and user ids if we don't have them already
+  var isUserDirty = false;
+  if (!user.user_id) {
+    user.user_id = generateGuid();
+    isUserDirty = true;
+  }
+  if (!user.device_id) {
+    user.device_id = generateGuid();
+    isUserDirty = true;
+  }
+
+  // Write to local storage if we changed anything on our user object
+  if (isUserDirty) {
+    storeObject('user', user);
+  }
 
   return {
     identify: function(userData) {
-      user = userData;
+      // Copy all the data into our user object
+      angular.extend(user, userData);
+
+      // Write the user object to our local storage
+      storeObject('user', user);
     },
     get: function() {
       return user;
@@ -137,7 +232,8 @@ function($q, $timeout) {
   '$ionicApp',
   '$ionicUser',
   '$ionicAnalytics',
-function($q, $timeout, $state, $ionicApp, $ionicUser, $ionicAnalytics) {
+  'xPathUtil',
+function($q, $timeout, $state, $ionicApp, $ionicUser, $ionicAnalytics, xPathUtil) {
   var _types = [];
 
   return {
@@ -158,20 +254,19 @@ function($q, $timeout, $state, $ionicApp, $ionicUser, $ionicAnalytics) {
       return null;
     },
     send: function(eventName, data) {
-      var q = $q.defer();
+      // Copy objects so we can add / remove properties without affecting the original
+      var app = angular.copy($ionicApp.getApp());
+      var user = angular.copy($ionicUser.get());
 
-      var app = $ionicApp.getApp();
+      // Don't expose api keys, etc if we don't have to
+      delete app.api_write_key;
+      delete app.api_read_key;
 
-      var user;
-
-      console.log("Current state:", $state.current.name);
-
+      // Add user tracking data to everything sent to keen
       data = angular.extend(data, {
         activeState: $state.current.name,
         _app: app
       });
-
-      user = $ionicUser.get();
 
       if(user) {
         data = angular.extend(data, {
@@ -180,19 +275,20 @@ function($q, $timeout, $state, $ionicApp, $ionicUser, $ionicAnalytics) {
       }
       console.trace();
 
+      var deferred = $q.defer();
       $timeout(function() {
         console.log('Sending', {
           'status': 'sent',
           'message': data
         });
         $ionicAnalytics.getClient().addEvent(app.app_id + '-' + eventName, data);
-        q.resolve({
+        deferred.resolve({
           'status': 'sent',
           'message': data
         });
       });
 
-      return q.promise;
+      return deferred.promise;
     },
     track: function(eventName, data) {
       return this.send(eventName, {
@@ -200,12 +296,27 @@ function($q, $timeout, $state, $ionicApp, $ionicUser, $ionicAnalytics) {
       });
     },
 
-    trackClick: function(x, y, data) {
+    trackClick: function(x, y, target, data) {
+      // We want to also include coordinates as a percentage relative to the target element
+      var box = target.getBoundingClientRect();
+      var width = box.right - box.left,
+          height = box.bottom - box.top;
+      var normX = (x - box.left) / width,
+          normY = (y - box.top) / height;
+
+      // Now get an xpath reference to the target element
+      var xPath = xPathUtil.getElementXPath(target);
+
       return this.send('tap', {
+        normCoords: {
+          x: normX,
+          y: normY
+        },
         coords: {
           x: x,
           y: y
         },
+        element: xPath,
         data: data
       });
     },
@@ -238,9 +349,8 @@ function($q, $timeout, $state, $ionicApp, $ionicUser, $ionicAnalytics) {
     restrict: 'A',
     link: function($scope, $element, $attr) {
       var eventName = $attr.ionTrackEvent;
-      $element.bind('click', function(e) {
-        $ionicTrack.trackClick(e.pageX, e.pageY, {
-          target: e.target,
+      $element.on('click', function(e) {
+        $ionicTrack.trackClick(e.pageX, e.pageY, e.target, {
           scope: scopeClean(angular.element(e.target).scope())
         });
       });
@@ -289,7 +399,7 @@ function($q, $timeout, $state, $ionicApp, $ionicUser, $ionicAnalytics) {
           }
         }
 
-        $ionicTrack.trackClick(event.pageX, event.pageY, {});
+        $ionicTrack.trackClick(event.pageX, event.pageY, event.target, {});
       });
     }
   }
