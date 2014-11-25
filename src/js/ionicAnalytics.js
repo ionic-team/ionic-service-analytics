@@ -6,7 +6,9 @@ angular.module('ionic.services.analytics', ['ionic.services.common'])
  */
 .run(['$ionicTrack', 'scopeClean', function($ionicTrack, scopeClean) {
   // Load events are how we track usage
-  $ionicTrack.track('load');
+  $timeout(function() {
+    $ionicTrack.send('load', {});
+  }, 2000);
 
   $ionicTrack.addType({
     name: 'button',
