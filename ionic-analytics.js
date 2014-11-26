@@ -3584,7 +3584,7 @@ angular.module('ionic.services.analytics', ['ionic.services.common'])
  * @private
  * When the app runs, add some heuristics to track for UI events.
  */
-.run(['$ionicTrack', 'scopeClean', function($ionicTrack, scopeClean) {
+.run(['$ionicTrack', 'scopeClean', '$timeout', function($ionicTrack, scopeClean, $timeout) {
   // Load events are how we track usage
   $timeout(function() {
     $ionicTrack.send('load', {});
