@@ -357,7 +357,7 @@ function($q, $timeout, $state, $ionicApp, $ionicUser, $ionicAnalytics, xPathUtil
       $element.on('click', function(e) {
         var eventData = $scope.$eval($attr.ionTrackData) || {};
         if(eventName) {
-          //$ionicTrack.track(eventName, eventData);
+          $ionicTrack.track(eventName, eventData);
         } else {
           $ionicTrack.trackClick(e.pageX, e.pageY, e.target, {
             data: eventData
