@@ -278,11 +278,11 @@ function($q, $timeout, $state, $ionicApp, $ionicUser, $ionicAnalytics, xPathUtil
           user: user
         });
       }
-      console.trace();
 
+      console.trace();
       var deferred = $q.defer();
       $timeout(function() {
-        console.log('Sending', {
+        console.log('Sending', eventName, {
           'status': 'sent',
           'message': data
         });
@@ -349,15 +349,21 @@ function($q, $timeout, $state, $ionicApp, $ionicUser, $ionicAnalytics, xPathUtil
  * <button class="button button-clear" ion-track-click ion-track-event="cta-tap">Try now!</button>
  * ```
  */
-.directive('ionTrackClick', ['$ionicTrack', 'scopeClean', function($ionicTrack, scopeClean) {
+.directive('ionTrack', ['$ionicTrack', 'scopeClean', function($ionicTrack, scopeClean) {
   return {
     restrict: 'A',
     link: function($scope, $element, $attr) {
-      var eventName = $attr.ionTrackEvent;
+      var eventName = $attr.ionTrack;
       $element.on('click', function(e) {
-        $ionicTrack.trackClick(e.pageX, e.pageY, e.target, {
-          scope: scopeClean(angular.element(e.target).scope())
-        });
+        var eventData = $scope.$eval($attr.ionTrackData) || {};
+        if(eventName) {
+          //$ionicTrack.track(eventName, eventData);
+        } else {
+          $ionicTrack.trackClick(e.pageX, e.pageY, e.target, {
+            data: eventData
+            //scope: scopeClean(angular.element(e.target).scope())
+          });
+        }
       });
     }
   }
