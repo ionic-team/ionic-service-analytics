@@ -144,7 +144,6 @@
 
       })
 
-
       .config(['$ionicAppProvider', function($ionicAppProvider) {
         $ionicAppProvider.identify({
           app_id: 'b8ca7003',
@@ -158,9 +157,6 @@
           user_id: '99',
           name: 'Max Lynch',
           email: 'max@drifty.com'
-        });
-        $ionicTrack.track('Load').then(function(resp) {
-          console.log(resp);
         });
       })
       .controller('FriendCtrl', function($scope) {

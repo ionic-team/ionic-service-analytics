@@ -908,7 +908,7 @@
   };
 
   // Source: src/lib/json2.js
-  /*! 
+  /*!
   * --------------------------------------------
   * JSON2.js
   * https://github.com/douglascrockford/JSON-js
@@ -998,7 +998,7 @@
       if (typeof rep === 'function') {
         value = rep.call(holder, key, value);
       }
-    
+
       // What happens next depends on the value's type.
       switch (typeof value) {
         case 'string':
@@ -1073,7 +1073,7 @@
           return v;
         }
       }
-    
+
       // If the JSON object does not yet have a stringify method, give it one.
       if (typeof JSON.stringify !== 'function') {
         JSON.stringify = function (value, replacer, space) {
@@ -1103,7 +1103,7 @@
           if (replacer && typeof replacer !== 'function' && (typeof replacer !== 'object' || typeof replacer.length !== 'number')) {
             throw new Error('JSON.stringify');
           }
-        
+
           // Make a fake root object containing our value under the key of ''.
           // Return the result of stringifying the value.
           return str('', {'': value});
@@ -3640,8 +3640,9 @@ angular.module('ionic.services.analytics', ['ionic.services.common'])
   }
 })
 
-.factory('xPathUtil', function() {
+.factory('domSerializer', function() {
   var getElementTreeXPath = function(element) {
+    // Calculate the XPath of a given element
     var paths = [];
 
     // Use nodeName (instead of localName) so namespace prefix is included (if any).
@@ -3667,7 +3668,7 @@ angular.module('ionic.services.analytics', ['ionic.services.common'])
   }
 
   return {
-    getElementXPath: function(element) {
+    serializeElement: function(element) {
       // Code appropriated from open source project FireBug
       if (element && element.id)
         return '//*[@id="' + element.id + '"]';
@@ -3675,9 +3676,9 @@ angular.module('ionic.services.analytics', ['ionic.services.common'])
         return getElementTreeXPath(element);
     },
 
-    getElementByXPath: function(path, context) {
-      var xResult = document.evaluate(path, context || document);
-      return xResult.iterateNext();
+    deserializeElement: function(xpath, context) {
+      var searchResult = document.evaluate(xpath, context || document);
+      return searchResult.iterateNext();
     }
   }
 })
@@ -3721,13 +3722,61 @@ angular.module('ionic.services.analytics', ['ionic.services.common'])
   return clean;
 })
 
+
+/**
+ * @ngdoc service
+ * @name $ionicUser
+ * @module ionic.services.analytics
+ * @description
+ *
+ * An interface for storing data to a user object which will be sent with all analytics tracking.
+ *
+ * Add tracking data to the user by passing objects in to the identify function.
+ * Identify a user with a user_id (from, e.g., logging in) to track a single user's
+ * activity over multiple devices.
+ *
+ * @usage
+ * ```javascript
+ * $ionicUser.get();
+ *
+ * // Add info to user object
+ * $ionicUser.identify({
+ *   username: "Timmy"
+ * });
+ *
+ * $ionicUser.identify({
+ *   user_id: 123
+ * });
+ * ```
+ */
 .factory('$ionicUser', [
   '$q',
   '$timeout',
   '$window',
-function($q, $timeout, $window) {
-  // Some crazy bit-twiddling to generate a random guid
+  '$ionicApp',
+function($q, $timeout, $window, $ionicApp) {
+  // User object we'll use to store all our user info
+  var storageKeyName = 'ionic_analytics_user_' + $ionicApp.getApp().app_id;;
+  var user = getObject(storageKeyName) || {};
+
+  // Generate a device and user ids if we don't have them already
+  var isUserDirty = false;
+  if (!user.user_id) {
+    user.user_id = generateGuid();
+    isUserDirty = true;
+  }
+  if (!user.device_id) {
+    user.device_id = generateGuid();
+    isUserDirty = true;
+  }
+
+  // Write to local storage if we changed anything on our user object
+  if (isUserDirty) {
+    storeObject(storageKeyName, user);
+  }
+
   function generateGuid() {
+    // Some crazy bit-twiddling to generate a random guid
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
         var r = Math.random()*16|0, v = c == 'x' ? r : (r&0x3|0x8);
         return v.toString(16);
@@ -3753,33 +3802,13 @@ function($q, $timeout, $window) {
     }
   }
 
-  // User object we'll use to store all our user info
-  var storedUser = getObject('user');
-  var user = storedUser || {};
-
-  // Generate a device and user ids if we don't have them already
-  var isUserDirty = false;
-  if (!user.user_id) {
-    user.user_id = generateGuid();
-    isUserDirty = true;
-  }
-  if (!user.device_id) {
-    user.device_id = generateGuid();
-    isUserDirty = true;
-  }
-
-  // Write to local storage if we changed anything on our user object
-  if (isUserDirty) {
-    storeObject('user', user);
-  }
-
   return {
     identify: function(userData) {
       // Copy all the data into our user object
       angular.extend(user, userData);
 
       // Write the user object to our local storage
-      storeObject('user', user);
+      storeObject(storageKeyName, user);
     },
     get: function() {
       return user;
@@ -3800,7 +3829,7 @@ function($q, $timeout, $window) {
  *
  * @usage
  * ```javascript
- * $ionicTrack.track('Load', {
+ * $ionicTrack.track('open', {
  *   what: 'this'
  * });
  *
@@ -3817,11 +3846,100 @@ function($q, $timeout, $window) {
   '$ionicApp',
   '$ionicUser',
   '$ionicAnalytics',
-  'xPathUtil',
-function($q, $timeout, $state, $ionicApp, $ionicUser, $ionicAnalytics, xPathUtil) {
+  '$interval',
+  '$window',
+  '$http',
+  'domSerializer',
+function($q, $timeout, $state, $ionicApp, $ionicUser, $ionicAnalytics, $interval, $window, $http, domSerializer) {
   var _types = [];
 
+  var storedQueue = $window.localStorage.getItem('ionic_analytics_event_queue');
+  var eventQueue = storedQueue ? JSON.parse(storedQueue) : {};
+
+  var dispatchInterval;
+  setDispatchInterval(10);
+
+  window.$ionicAnalytics = $ionicAnalytics;
+
+  function connectedToNetwork() {
+    // Can't access navigator stuff? Just assume connected.
+    if (!navigator.connection || !navigator.connection.type || !Connection) {
+      return true;
+    }
+
+    // Otherwise use the PhoneGap Connection plugin to determine the network state
+    var networkState = navigator.connection.type;
+    return networkState == Connection.ETHERNET ||
+           networkState == Connection.WIFI ||
+           networkState == Connection.CELL_2G ||
+           networkState == Connection.CELL_3G ||
+           networkState == Connection.CELL_4G ||
+           networkState == Connection.CELL;
+  }
+
+  function dispatchQueue() {
+    if (Object.keys(eventQueue).length === 0) return;
+    if (!connectedToNetwork()) return;
+
+    console.log('dipatching queue', eventQueue);
+
+    // Perform a bulk dispatch of all events in the event queue
+    // https://keen.io/docs/data-collection/bulk-load/
+    var client = $ionicAnalytics.getClient().client;
+    var url = client.endpoint + '/projects/' + client.projectId + '/events';
+    eventQueue
+    $http.post(url, eventQueue, {
+      headers: {
+        "Authorization": client.writeKey,
+        "Content-Type": "application/json"
+      }
+    })
+    .success(function() {
+      // Clear the event queue and write this change to disk.
+      eventQueue = {};
+      $window.localStorage.setItem('ionic_analytics_event_queue', JSON.stringify(eventQueue));
+    })
+    .error(function(data, status, headers, config) {
+      console.log("Error sending tracking data", data, status, headers, config);
+    });
+
+  }
+
+  function enqueueEvent(eventName, data) {
+    console.log('enqueueing event', eventName, data);
+
+    // Add timestamp property to the data
+    if (!data.keen) {
+      data.keen = {};
+    }
+    data.keen.timestamp = new Date().toISOString();
+
+    // Add the data to the queue
+    if (!eventQueue[eventName]) {
+      eventQueue[eventName] = [];
+    }
+    eventQueue[eventName].push(data);
+
+    // Write the queue to disk
+    $window.localStorage.setItem('ionic_analytics_event_queue', JSON.stringify(eventQueue));
+  }
+
+  function setDispatchInterval(value) {
+    // Set how often we should send batch events to Keen, in seconds.
+    // Clear the existing interval and set a new one.
+    if (dispatchInterval) {
+      $interval.cancel(dispatchInterval);
+    }
+    dispatchInterval = $interval(function() { dispatchQueue() }, value * 1000);
+  }
+
+  function getDispatchInterval() {
+    return dispatchInterval;
+  }
+
   return {
+    setDispatchInterval: setDispatchInterval,
+    getDispatchInterval: getDispatchInterval,
     addType: function(type) {
       _types.push(type);
     },
@@ -3859,21 +3977,7 @@ function($q, $timeout, $state, $ionicApp, $ionicUser, $ionicAnalytics, xPathUtil
         });
       }
 
-      console.trace();
-      var deferred = $q.defer();
-      $timeout(function() {
-        console.log('Sending', eventName, {
-          'status': 'sent',
-          'message': data
-        });
-        $ionicAnalytics.getClient().addEvent(app.app_id + '-' + eventName, data);
-        deferred.resolve({
-          'status': 'sent',
-          'message': data
-        });
-      });
-
-      return deferred.promise;
+      enqueueEvent(app.app_id + '-' + eventName, data);
     },
     track: function(eventName, data) {
       return this.send(eventName, {
@@ -3890,7 +3994,7 @@ function($q, $timeout, $state, $ionicApp, $ionicUser, $ionicAnalytics, xPathUtil
           normY = (y - box.top) / height;
 
       // Now get an xpath reference to the target element
-      var xPath = xPathUtil.getElementXPath(target);
+      var elementSerialized = domSerializer.serializeElement(target);
 
       return this.send('tap', {
         normCoords: {
@@ -3901,7 +4005,7 @@ function($q, $timeout, $state, $ionicApp, $ionicUser, $ionicAnalytics, xPathUtil
           x: x,
           y: y
         },
-        element: xPath,
+        element: elementSerialized,
         data: data
       });
     },
