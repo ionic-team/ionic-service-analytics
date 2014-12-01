@@ -469,6 +469,7 @@ function($q, $timeout, $state, $ionicApp, $ionicUser, $ionicAnalytics, $interval
   return {
     restrict: 'A',
     link: function($scope, $element, $attr) {
+      console.log($attr);
       var eventName = $attr.ionTrack;
       $element.on('click', function(e) {
         var eventData = $scope.$eval($attr.ionTrackData) || {};
