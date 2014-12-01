@@ -3853,13 +3853,13 @@ function($q, $timeout, $window, $ionicApp) {
 function($q, $timeout, $state, $ionicApp, $ionicUser, $ionicAnalytics, $interval, $window, $http, domSerializer) {
   var _types = [];
 
+
   var storedQueue = $window.localStorage.getItem('ionic_analytics_event_queue');
   var eventQueue = storedQueue ? JSON.parse(storedQueue) : {};
 
+  var useEventCaching = true;
   var dispatchInterval;
-  setDispatchInterval(10);
-
-  window.$ionicAnalytics = $ionicAnalytics;
+  setDispatchInterval(2 * 60);
 
   function connectedToNetwork() {
     // Can't access navigator stuff? Just assume connected.
@@ -3887,7 +3887,6 @@ function($q, $timeout, $state, $ionicApp, $ionicUser, $ionicAnalytics, $interval
     // https://keen.io/docs/data-collection/bulk-load/
     var client = $ionicAnalytics.getClient().client;
     var url = client.endpoint + '/projects/' + client.projectId + '/events';
-    eventQueue
     $http.post(url, eventQueue, {
       headers: {
         "Authorization": client.writeKey,
@@ -3926,11 +3925,19 @@ function($q, $timeout, $state, $ionicApp, $ionicUser, $ionicAnalytics, $interval
 
   function setDispatchInterval(value) {
     // Set how often we should send batch events to Keen, in seconds.
+    // Set this to a nonpositive number to disable event caching
+
     // Clear the existing interval and set a new one.
     if (dispatchInterval) {
       $interval.cancel(dispatchInterval);
     }
-    dispatchInterval = $interval(function() { dispatchQueue() }, value * 1000);
+
+    if (value > 0) {
+      dispatchInterval = $interval(function() { dispatchQueue() }, value * 1000);
+      useEventCaching = true;
+    } else {
+      useEventCaching = false;
+    }
   }
 
   function getDispatchInterval() {
@@ -3977,7 +3984,12 @@ function($q, $timeout, $state, $ionicApp, $ionicUser, $ionicAnalytics, $interval
         });
       }
 
-      enqueueEvent(app.app_id + '-' + eventName, data);
+      if (useEventCaching) {
+        enqueueEvent(app.app_id + '-' + eventName, data);
+      } else {
+        console.log('Immediate event dispatch', eventName, data);
+        $ionicAnalytics.getClient().addEvent(app.app_id + '-' + eventName, data);
+      }
     },
     track: function(eventName, data) {
       return this.send(eventName, {
