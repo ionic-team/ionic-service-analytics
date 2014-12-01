@@ -279,7 +279,7 @@ function($q, $timeout, $state, $ionicApp, $ionicUser, $ionicAnalytics, $interval
 
   var useEventCaching = true;
   var dispatchInterval;
-  setDispatchInterval(2 * 60);
+  setDispatchInterval(5);
 
   function connectedToNetwork() {
     // Can't access navigator stuff? Just assume connected.

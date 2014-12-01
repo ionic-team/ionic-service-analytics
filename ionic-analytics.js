@@ -167,10 +167,11 @@
   function _set_request_type(value) {
     var configured = value || 'jsonp';
     var capableXHR = false;
+    //if ((typeof XMLHttpRequest === 'object' || typeof XMLHttpRequest === 'function') && 'withCredentials' in new XMLHttpRequest()) {
     if ((_type(XMLHttpRequest)==='Object'||_type(XMLHttpRequest)==='Function') && 'withCredentials' in new XMLHttpRequest()) {
       capableXHR = true;
-      Keen.canXHR = true;
     }
+    //var capableXHR = (void 0 !== XMLHttpRequest && 'withCredentials' in new XMLHttpRequest());
 
     if (configured == null || configured == 'xhr') {
       if (capableXHR) {
@@ -188,175 +189,110 @@
   }
 
 
-  // -------------------------------
-  // XHR, JSONP, Beacon utilities
-  // -------------------------------
+  var _request = {
 
-  function _sendXhr(method, url, headers, body, success, error){
-    var ids = ['MSXML2.XMLHTTP.3.0', 'MSXML2.XMLHTTP', 'Microsoft.XMLHTTP'],
-        successCallback = success,
-        errorCallback = error,
-        payload,
-        xhr;
-
-    success = null;
-    error = null;
-
-    if (window.XMLHttpRequest) {
-      xhr = new XMLHttpRequest();
-    }
-    else {
-      // Legacy IE support: look up alts if XMLHttpRequest is not available
-      for (var i = 0; i < ids.length; i++) {
-        try {
-          xhr = new ActiveXObject(ids[i]);
-          break;
-        } catch(e) {}
-      }
-    }
-
-    xhr.onreadystatechange = function() {
-      var response;
-      if (xhr.readyState == 4) {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          try {
-            response = JSON.parse(xhr.responseText);
-          } catch (e) {
-            Keen.log("Could not parse HTTP response: " + xhr.responseText);
-            if (errorCallback) {
-              errorCallback(xhr, e);
-              successCallback = errorCallback = null;
+    xhr: function(method, url, headers, body, apiKey, success, error){
+      if (!apiKey) return Keen.log('Please provide a writeKey for https://keen.io/project/' + this.client.projectId);
+      var xhr = new XMLHttpRequest();
+      xhr.onreadystatechange = function () {
+        if (xhr.readyState == 4) {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            var response;
+            try {
+              response = JSON.parse(xhr.responseText);
+            } catch (e) {
+              Keen.log("Could not JSON parse HTTP response: " + xhr.responseText);
+              if (error) error(xhr, e);
             }
-          }
-          if (successCallback && response) {
-            successCallback(response);
-            successCallback = errorCallback = null;
-          }
-        } else {
-          Keen.log("HTTP request failed.");
-          if (errorCallback) {
-            errorCallback(xhr, null);
-            successCallback = errorCallback = null;
+            if (success && response) success(response);
+          } else {
+            Keen.log("HTTP request failed.");
+            if (error) error(xhr, null);
           }
         }
-      }
-    };
-
-    xhr.open(method, url, true);
-
-    _each(headers, function(value, key){
-      xhr.setRequestHeader(key, value);
-    });
-
-    if (body) {
-      payload = JSON.stringify(body);
-    }
-
-    if (method && method.toUpperCase() === "GET") {
-      xhr.send();
-    } else if (method && method.toUpperCase() === "POST") {
-      xhr.send(payload);
-    }
-
-  }
-
-  function _sendJsonp(url, params, success, error){
-    var timestamp = new Date().getTime(),
-        successCallback = success,
-        errorCallback = error,
-        script = document.createElement("script"),
-        parent = document.getElementsByTagName("head")[0],
-        callbackName = "keenJSONPCallback",
-        scriptId = "keen-jsonp",
-        loaded = false;
-
-    success = null;
-    error = null;
-
-    callbackName += timestamp;
-    scriptId += timestamp;
-
-    while (callbackName in window) {
-      callbackName += "a";
-    }
-    window[callbackName] = function (response) {
-      loaded = true;
-      if (successCallback && response) {
-        successCallback(response);
       };
-      parent.removeChild(script);
-      delete window[callbackName];
-      successCallback = errorCallback = null;
-    };
+      xhr.open(method, url, true);
+      if (apiKey) xhr.setRequestHeader("Authorization", apiKey);
+      if (body) xhr.setRequestHeader("Content-Type", "application/json");
+      if (headers) {
+        for (var headerName in headers) {
+          if (headers.hasOwnProperty(headerName)) xhr.setRequestHeader(headerName, headers[headerName]);
+        }
+      }
+      var toSend = body ? JSON.stringify(body) : null;
+      xhr.send(toSend);
+    },
 
-    script.id = scriptId;
-    script.src = url + "&jsonp=" + callbackName;
+    jsonp: function(url, apiKey, success, error){
+      if (!apiKey) return Keen.log('Please provide a writeKey for https://keen.io/project/' + this.client.projectId);
+      if (apiKey && url.indexOf("api_key") < 0) {
+        var delimiterChar = url.indexOf("?") > 0 ? "&" : "?";
+        url = url + delimiterChar + "api_key=" + apiKey;
+      }
 
-    parent.appendChild(script);
-
-    // for early IE w/ no onerror event
-    script.onreadystatechange = function() {
-      if (loaded === false && this.readyState === "loaded") {
+      var callbackName = "keenJSONPCallback" + new Date().getTime();
+      while (callbackName in window) {
+        callbackName += "a";
+      }
+      var loaded = false;
+      window[callbackName] = function (response) {
         loaded = true;
-        if (errorCallback) {
-          errorCallback();
-          successCallback = errorCallback = null;
+        if (success && response) {
+          success(response);
+        };
+        // Remove this from the namespace
+        window[callbackName] = undefined;
+      };
+      url = url + "&jsonp=" + callbackName;
+      var script = document.createElement("script");
+      script.id = "keen-jsonp";
+      script.src = url;
+      document.getElementsByTagName("head")[0].appendChild(script);
+      // for early IE w/ no onerror event
+      script.onreadystatechange = function() {
+        if (loaded === false && this.readyState === "loaded") {
+          loaded = true;
+          if (error) error();
         }
       }
-    };
+      // non-ie, etc
+      script.onerror = function() {
+        if (loaded === false) { // on IE9 both onerror and onreadystatechange are called
+          loaded = true;
+          if (error) error();
+        }
+      }
+    },
 
-    // non-ie, etc
-    script.onerror = function() {
-      // on IE9 both onerror and onreadystatechange are called
-      if (loaded === false) {
+    beacon: function(url, apiKey, success, error){
+      if (apiKey && url.indexOf("api_key") < 0) {
+        var delimiterChar = url.indexOf("?") > 0 ? "&" : "?";
+        url = url + delimiterChar + "api_key=" + apiKey;
+      }
+      var loaded = false, img = document.createElement("img");
+      img.onload = function() {
         loaded = true;
-        if (errorCallback) {
-          errorCallback();
-          successCallback = errorCallback = null;
+        if ('naturalHeight' in this) {
+          if (this.naturalHeight + this.naturalWidth === 0) {
+            this.onerror(); return;
+          }
+        } else if (this.width + this.height === 0) {
+          this.onerror(); return;
         }
-      }
-    };
-  }
-
-  function _sendBeacon(url, params, success, error){
-    var successCallback = success,
-        errorCallback = error,
-        loaded = false,
-        img = document.createElement("img");
-
-    success = null;
-    error = null;
-
-    img.onload = function() {
-      loaded = true;
-      if ('naturalHeight' in this) {
-        if (this.naturalHeight + this.naturalWidth === 0) {
-          this.onerror();
-          return;
-        }
-      } else if (this.width + this.height === 0) {
-        this.onerror();
-        return;
-      }
-      if (successCallback) {
-        successCallback({created: true});
-        successCallback = errorCallback = null;
-      }
-    };
-    img.onerror = function() {
-      loaded = true;
-      if (errorCallback) {
-        errorCallback();
-        successCallback = errorCallback = null;
-      }
-    };
-    img.src = url + "&c=clv1";
-  }
+        if (success) success({created: true});
+      };
+      img.onerror = function() {
+        loaded = true;
+        if (error) error();
+      };
+      img.src = url;
+    }
+  };
 
 
   // -------------------------------
   // Keen.Events
-  // We <3 BackboneJS!
+  // (Based heavily on backbone.js!)
   // -------------------------------
 
   var Events = Keen.Events = {
@@ -375,58 +311,22 @@
       once._callback = callback;
       return self.on(name, once, context);
     },
-    off: function(name, callback, context) {
-      if (!this.listeners) return this;
-
-      // Remove all callbacks for all events.
-      if (!name && !callback && !context) {
+    off: function(name, callback) {
+      if (!name && !callback) {
         this.listeners = void 0;
+        delete this.listeners;
         return this;
       }
-
-      var names = [];
-      if (name) {
-        names.push(name);
-      } else {
-        _each(this.listeners, function(value, key){
-          names.push(key);
-        });
-      }
-
-      for (var i = 0, length = names.length; i < length; i++) {
-        name = names[i];
-
-        // Bail out if there are no events stored.
-        var events = this.listeners[name];
-        if (!events) continue;
-
-        // Remove all callbacks for this event.
-        if (!callback && !context) {
-          delete this.listeners[name];
-          continue;
+      var events = this.listeners[name] || [];
+      for (var i = events.length; i--;) {
+        if (callback && callback == events[i]['callback']) {
+          this.listeners[name].splice(i, 1);
         }
-
-        // Find any remaining events.
-        var remaining = [];
-        for (var j = 0, k = events.length; j < k; j++) {
-          var event = events[j];
-          if (
-            callback && callback !== event.callback &&
-            callback !== event.callback._callback ||
-            context && context !== event.context
-          ) {
-            remaining.push(event);
-          }
-        }
-
-        // Replace events if there are any remaining.  Otherwise, clean up.
-        if (remaining.length) {
-          this.listeners[name] = remaining;
-        } else {
+        if (!callback || events.length == 0) {
+          this.listeners[name] = void 0;
           delete this.listeners[name];
         }
       }
-
       return this;
     },
     trigger: function(name) {
@@ -443,11 +343,6 @@
   _extend(Keen, Events);
 
   Keen.loaded = true;
-
-  Keen.urlMaxLength = 16000;
-  if (navigator.userAgent.indexOf('MSIE') !== -1 || navigator.appVersion.indexOf('Trident/') > 0) {
-    Keen.urlMaxLength = 2000;
-  }
 
   // Expose utils
   Keen.utils = {
@@ -556,41 +451,48 @@
   // -------------------------------
 
   function _uploadEvent(eventCollection, payload, success, error) {
-    var urlBase = _build_url.call(this, "/events/" + eventCollection),
-        urlQueryString = "",
-        reqType = this.client.requestType,
-        data = {};
+    var url = _build_url.apply(this, ['/events/' + eventCollection]);
+    var newEvent = {};
 
     // Add properties from client.globalProperties
     if (this.client.globalProperties) {
-      data = this.client.globalProperties(eventCollection);
+      newEvent = this.client.globalProperties(eventCollection);
     }
 
     // Add properties from user-defined event
-    _each(payload, function(value, key){
-      data[key] = value;
-    });
-
-    if (reqType !== "xhr") {
-      urlQueryString += "?api_key="  + encodeURIComponent( this.client.writeKey );
-      urlQueryString += "&data="     + encodeURIComponent( Keen.Base64.encode( JSON.stringify(data) ) );
-      urlQueryString += "&modified=" + encodeURIComponent( new Date().getTime() );
-
-      if ( String(urlBase + urlQueryString).length < Keen.urlMaxLength ) {
-        if (reqType === "jsonp") {
-          _sendJsonp(urlBase + urlQueryString, null, success, error);
-        } else {
-          _sendBeacon(urlBase + urlQueryString, null, success, error);
-        }
-        return;
+    for (var property in payload) {
+      if (payload.hasOwnProperty(property)) {
+        newEvent[property] = payload[property];
       }
     }
-    if (Keen.canXHR) {
-      _sendXhr("POST", urlBase, { "Authorization": this.client.writeKey, "Content-Type": "application/json" }, data, success, error);
-    } else {
-      Keen.log("Event not sent: URL length exceeds current browser limit, and XHR (POST) is not supported.");
+
+    // Send data
+    switch(this.client.requestType){
+
+      case 'xhr':
+        _request.xhr.apply(this, ["POST", url, null, newEvent, this.client.writeKey, success, error]);
+        break;
+
+      case 'jsonp':
+        var jsonBody = JSON.stringify(newEvent);
+        var base64Body = Keen.Base64.encode(jsonBody);
+        url = url + "?api_key=" + this.client.writeKey;
+        url = url + "&data=" + encodeURIComponent(base64Body);
+        url = url + "&modified=" + new Date().getTime();
+        _request.jsonp.apply(this, [url, this.client.writeKey, success, error])
+        break;
+
+      case 'beacon':
+        var jsonBody = JSON.stringify(newEvent);
+        var base64Body = Keen.Base64.encode(jsonBody);
+        url = url + "?api_key=" + encodeURIComponent(this.client.writeKey);
+        url = url + "&data=" + encodeURIComponent(base64Body);
+        url = url + "&modified=" + encodeURIComponent(new Date().getTime());
+        url = url + "&c=clv1";
+        _request.beacon.apply(this, [url, null, success, error]);
+        break;
+
     }
-    return;
   };
 
   // Source: src/query.js
@@ -606,21 +508,13 @@
   // -------------------------------
 
   Keen.prototype.run = function(query, success, error) {
-    var queries = [],
-        successCallback = success,
-        errorCallback = error;
-
-    success = null;
-    error = null;
-
+    var queries = [];
     if ( _type(query) === 'Array' ) {
       queries = query;
     } else {
       queries.push(query);
     }
-    var req = new Keen.Request(this, queries, successCallback, errorCallback);
-    successCallback = errorCallback = null;
-    return req;
+    return new Keen.Request(this, queries, success, error);
   };
 
 
@@ -629,27 +523,16 @@
   // -------------------------------
 
   Keen.Request = function(instance, queries, success, error){
-    var successCallback = success,
-        errorCallback = error;
-
-    success = null;
-    error = null;
-
-    this.configure(instance, queries, successCallback, errorCallback);
-    successCallback = errorCallback = null;
+    this.data;
+    this.configure(instance, queries, success, error);
   };
   _extend(Keen.Request.prototype, Events);
 
   Keen.Request.prototype.configure = function(instance, queries, success, error){
     this.instance = instance;
     this.queries = queries;
-    this.data;
-
     this.success = success;
-    success = null;
-
     this.error = error;
-    error = null;
 
     this.refresh();
     return this;
@@ -696,7 +579,7 @@
     };
 
     _each(self.queries, function(query, index){
-      var url;
+      var url = null;
       var successSequencer = function(res){
         handleSuccess(res, index);
       };
@@ -704,27 +587,34 @@
         handleFailure(res, index);
       };
 
-      if (query instanceof Keen.Query) {
+      if (query instanceof Keen.Query || query instanceof Keen.Query) {
         url = _build_url.call(self.instance, query.path);
-        _sendQuery.call(self.instance, url, query.params, successSequencer, failureSequencer);
+        url += "?api_key=" + self.instance.client.readKey;
+        url += _build_query_string.call(self.instance, query.params);
 
       } else if ( Object.prototype.toString.call(query) === '[object String]' ) {
         url = _build_url.call(self.instance, '/saved_queries/' + encodeURIComponent(query) + '/result');
-        _sendQuery.call(self.instance, url, null, successSequencer, failureSequencer);
+        url += "?api_key=" + self.instance.client.readKey;
 
       } else {
         var res = {
           statusText: 'Bad Request',
-          responseText: { message: 'Error: Query ' + (+index+1) + ' of ' + self.queries.length + ' for project ' + self.instance.client.projectId + ' is not a valid request' }
+          responseText: { message: 'Error: Query ' + (i+1) + ' of ' + self.queries.length + ' for project ' + self.instance.client.projectId + ' is not a valid request' }
         };
         Keen.log(res.responseText.message);
         Keen.log('Check out our JavaScript SDK Usage Guide for Data Analysis:');
         Keen.log('https://keen.io/docs/clients/javascript/usage-guide/#analyze-and-visualize');
-        if (self.error) {
-          self.error(res.responseText.message);
-        }
+        if (self.error) self.error(res.responseText.message);
       }
+      if (url) _send_query.call(self.instance, url, successSequencer, failureSequencer);
     });
+
+    /*for (var i = 0; i < self.queries.length; i++) {
+      (function(query, index){
+
+
+      })(self.queries[i], i);
+    }*/
     return this;
   };
 
@@ -748,7 +638,7 @@
 
     // Localize timezone if none is set
     if (this.params.timezone === void 0) {
-      this.params.timezone = _getTimezoneOffset();
+      this.params.timezone = _build_timezone_offset();
     }
     return this;
   };
@@ -802,11 +692,11 @@
   // Private
   // --------------------------------
 
-  function _getTimezoneOffset(){
+  function _build_timezone_offset(){
     return new Date().getTimezoneOffset() * -60;
   };
 
-  function _getQueryString(params){
+  function _build_query_string(params){
     var query = [];
     for (var key in params) {
       if (params[key]) {
@@ -821,37 +711,13 @@
     return "&" + query.join('&');
   };
 
-
-  function _sendQuery(url, params, success, error){
-    var urlBase = url,
-        urlQueryString = "",
-        reqType = this.client.requestType,
-        successCallback = success,
-        errorCallback = error;
-
-    success = null;
-    error = null;
-
-    if (urlBase.indexOf("extraction") > -1) {
-      // Extractions do not currently support JSONP
-      reqType = "xhr";
-    }
-    urlQueryString += "?api_key=" + this.client.readKey;
-    urlQueryString += _getQueryString.call(this, params);
-    if (reqType !== "xhr") {
-      if ( String(urlBase + urlQueryString).length < Keen.urlMaxLength ) {
-        _sendJsonp(urlBase + urlQueryString, null, successCallback, errorCallback);
-        return;
-      }
-    }
-    if (Keen.canXHR) {
-      _sendXhr("GET", urlBase + urlQueryString, null, null, successCallback, errorCallback);
+  function _send_query(url, success, error){
+    if ((_type(XMLHttpRequest)==='Object'||_type(XMLHttpRequest)==='Function') && 'withCredentials' in new XMLHttpRequest()) {
+      _request.xhr.call(this, "GET", url, null, null, this.client.readKey, success, error);
     } else {
-      Keen.log("Event not sent: URL length exceeds current browser limit, and XHR (POST) is not supported.");
+      _request.jsonp.call(this, url, this.client.readKey, success, error);
     }
-    successCallback = errorCallback = null;
-    return;
-  }
+  };
 
   // Source: src/lib/base64.js
   /*!
@@ -908,7 +774,7 @@
   };
 
   // Source: src/lib/json2.js
-  /*!
+  /*! 
   * --------------------------------------------
   * JSON2.js
   * https://github.com/douglascrockford/JSON-js
@@ -998,7 +864,7 @@
       if (typeof rep === 'function') {
         value = rep.call(holder, key, value);
       }
-
+    
       // What happens next depends on the value's type.
       switch (typeof value) {
         case 'string':
@@ -1073,7 +939,7 @@
           return v;
         }
       }
-
+    
       // If the JSON object does not yet have a stringify method, give it one.
       if (typeof JSON.stringify !== 'function') {
         JSON.stringify = function (value, replacer, space) {
@@ -1103,7 +969,7 @@
           if (replacer && typeof replacer !== 'function' && (typeof replacer !== 'object' || typeof replacer.length !== 'number')) {
             throw new Error('JSON.stringify');
           }
-
+        
           // Make a fake root object containing our value under the key of ''.
           // Return the result of stringifying the value.
           return str('', {'': value});
@@ -3859,7 +3725,7 @@ function($q, $timeout, $state, $ionicApp, $ionicUser, $ionicAnalytics, $interval
 
   var useEventCaching = true;
   var dispatchInterval;
-  setDispatchInterval(2 * 60);
+  setDispatchInterval(5);
 
   function connectedToNetwork() {
     // Can't access navigator stuff? Just assume connected.
@@ -4049,6 +3915,7 @@ function($q, $timeout, $state, $ionicApp, $ionicUser, $ionicAnalytics, $interval
   return {
     restrict: 'A',
     link: function($scope, $element, $attr) {
+      console.log($attr);
       var eventName = $attr.ionTrack;
       $element.on('click', function(e) {
         var eventData = $scope.$eval($attr.ionTrackData) || {};
