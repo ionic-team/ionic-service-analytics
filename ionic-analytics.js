@@ -3853,17 +3853,23 @@ function($q, $timeout, $window, $ionicApp) {
 function($q, $timeout, $state, $ionicApp, $ionicUser, $ionicAnalytics, $interval, $window, $http, domSerializer) {
   var _types = [];
 
-
   var storedQueue = $window.localStorage.getItem('ionic_analytics_event_queue');
   var eventQueue = storedQueue ? JSON.parse(storedQueue) : {};
 
   var useEventCaching = true;
+  var dispatchInProgress = false;
   var dispatchInterval;
+  var dispatchIntervalTime;
   setDispatchInterval(2 * 60);
+  $timeout(function() {
+    dispatchQueue();
+  });
 
   function connectedToNetwork() {
     // Can't access navigator stuff? Just assume connected.
-    if (!navigator.connection || !navigator.connection.type || !Connection) {
+    if (typeof navigator.connection === 'undefined' ||
+        typeof navigator.connection.type === 'undefined' ||
+        typeof Connection === 'undefined') {
       return true;
     }
 
@@ -3880,8 +3886,10 @@ function($q, $timeout, $state, $ionicApp, $ionicUser, $ionicAnalytics, $interval
   function dispatchQueue() {
     if (Object.keys(eventQueue).length === 0) return;
     if (!connectedToNetwork()) return;
+    if (dispatchInProgress) return;
 
     console.log('dipatching queue', eventQueue);
+    dispatchInProgress = true;
 
     // Perform a bulk dispatch of all events in the event queue
     // https://keen.io/docs/data-collection/bulk-load/
@@ -3897,9 +3905,11 @@ function($q, $timeout, $state, $ionicApp, $ionicUser, $ionicAnalytics, $interval
       // Clear the event queue and write this change to disk.
       eventQueue = {};
       $window.localStorage.setItem('ionic_analytics_event_queue', JSON.stringify(eventQueue));
+      dispatchInProgress = false;
     })
     .error(function(data, status, headers, config) {
       console.log("Error sending tracking data", data, status, headers, config);
+      dispatchInProgress = false;
     });
 
   }
@@ -3926,6 +3936,7 @@ function($q, $timeout, $state, $ionicApp, $ionicUser, $ionicAnalytics, $interval
   function setDispatchInterval(value) {
     // Set how often we should send batch events to Keen, in seconds.
     // Set this to a nonpositive number to disable event caching
+    dispatchIntervalTime = value;
 
     // Clear the existing interval and set a new one.
     if (dispatchInterval) {
@@ -3941,7 +3952,7 @@ function($q, $timeout, $state, $ionicApp, $ionicUser, $ionicAnalytics, $interval
   }
 
   function getDispatchInterval() {
-    return dispatchInterval;
+    return dispatchIntervalTime;
   }
 
   return {
