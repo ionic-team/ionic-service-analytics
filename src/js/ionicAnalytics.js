@@ -275,13 +275,18 @@ function($q, $timeout, $window, $ionicApp) {
 function($q, $timeout, $state, $ionicApp, $ionicUser, $ionicAnalytics, $interval, $window, $http, domSerializer) {
   var _types = [];
 
-  var storedQueue = $window.localStorage.getItem('ionic_analytics_event_queue');
-  var eventQueue = storedQueue ? JSON.parse(storedQueue) : {};
+  var storedQueue = $window.localStorage.getItem('ionic_analytics_event_queue'),
+      eventQueue;
+  try {
+    eventQueue = storedQueue ? JSON.parse(storedQueue) : {};
+  } catch (e) {
+    eventQueue = {};
+  }
 
-  var useEventCaching = true;
-  var dispatchInProgress = false;
-  var dispatchInterval;
-  var dispatchIntervalTime;
+  var useEventCaching = true,
+      dispatchInProgress = false,
+      dispatchInterval,
+      dispatchIntervalTime;
   setDispatchInterval(2 * 60);
   $timeout(function() {
     dispatchQueue();
@@ -315,8 +320,8 @@ function($q, $timeout, $state, $ionicApp, $ionicUser, $ionicAnalytics, $interval
 
     // Perform a bulk dispatch of all events in the event queue
     // https://keen.io/docs/data-collection/bulk-load/
-    var client = $ionicAnalytics.getClient().client;
-    var url = client.endpoint + '/projects/' + client.projectId + '/events';
+    var client = $ionicAnalytics.getClient().client,
+        url = client.endpoint + '/projects/' + client.projectId + '/events';
     $http.post(url, eventQueue, {
       headers: {
         "Authorization": client.writeKey,
