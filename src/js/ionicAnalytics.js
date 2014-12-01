@@ -1,4 +1,6 @@
-angular.module('ionic.services.analytics', ['ionic.services.common'])
+var IonicServiceAnalyticsModule = angular.module('ionic.services.analytics', ['ionic.services.common']);
+
+IonicServiceAnalyticsModule
 
 /**
  * @private
@@ -476,25 +478,27 @@ function($q, $timeout, $state, $ionicApp, $ionicUser, $ionicAnalytics, $interval
  * <button class="button button-clear" ion-track-click ion-track-event="cta-tap">Try now!</button>
  * ```
  */
-.directive('ionTrack', ['$ionicTrack', 'scopeClean', function($ionicTrack, scopeClean) {
-  return {
-    restrict: 'A',
-    link: function($scope, $element, $attr) {
-      var eventName = $attr.ionTrack;
-      $element.on('click', function(e) {
-        var eventData = $scope.$eval($attr.ionTrackData) || {};
-        if(eventName) {
-          $ionicTrack.track(eventName, eventData);
-        } else {
-          $ionicTrack.trackClick(e.pageX, e.pageY, e.target, {
-            data: eventData
-            //scope: scopeClean(angular.element(e.target).scope())
-          });
-        }
-      });
-    }
-  }
-}])
+
+.directive('ionTrackClick', ionTrackDirective('click'))
+.directive('ionTrackTap', ionTrackDirective('tap'))
+.directive('ionTrackDoubleTap', ionTrackDirective('doubletap'))
+.directive('ionTrackHold', ionTrackDirective('hold'))
+.directive('ionTrackRelease', ionTrackDirective('release'))
+.directive('ionTrackDrag', ionTrackDirective('drag'))
+.directive('ionTrackDragLeft', ionTrackDirective('dragleft'))
+.directive('ionTrackDragRight', ionTrackDirective('dragright'))
+.directive('ionTrackDragUp', ionTrackDirective('dragup'))
+.directive('ionTrackDragDown', ionTrackDirective('dragdown'))
+.directive('ionTrackSwipeLeft', ionTrackDirective('swipeleft'))
+.directive('ionTrackSwipeRight', ionTrackDirective('swiperight'))
+.directive('ionTrackSwipeUp', ionTrackDirective('swipeup'))
+.directive('ionTrackSwipeDown', ionTrackDirective('swipedown'))
+.directive('ionTrackTransform', ionTrackDirective('hold'))
+.directive('ionTrackPinch', ionTrackDirective('pinch'))
+.directive('ionTrackPinchIn', ionTrackDirective('pinchin'))
+.directive('ionTrackPinchOut', ionTrackDirective('pinchout'))
+.directive('ionTrackRotate', ionTrackDirective('rotate'))
+
 
 /**
  * @ngdoc directive
@@ -541,4 +545,64 @@ function($q, $timeout, $state, $ionicApp, $ionicUser, $ionicAnalytics, $interval
       });
     }
   }
-}])
+}]);
+
+/**
+ * Generic directive to create auto event handling analytics directives like:
+ *
+ * <button ion-track-click="eventName">Click Track</button>
+ * <button ion-track-hold="eventName">Hold Track</button>
+ * <button ion-track-tap="eventName">Tap Track</button>
+ * <button ion-track-doubletap="eventName">Double Tap Track</button>
+ */
+function ionTrackDirective(domEventName) {
+  return ['$ionicTrack', '$ionicGesture', 'scopeClean', function($ionicTrack, $ionicGesture, scopeClean) {
+
+    var gesture_driven = [
+      'drag', 'dragstart', 'dragend', 'dragleft', 'dragright', 'dragup', 'dragdown',
+      'swipe', 'swipeleft', 'swiperight', 'swipeup', 'swipedown',
+      'tap', 'doubletap', 'hold',
+      'transform', 'pinch', 'pinchin', 'pinchout', 'rotate'
+    ];
+    // Check if we need to use the gesture subsystem or the DOM system
+    var isGestureDriven = false;
+    for(var i = 0; i < gesture_driven.length; i++) {
+      if(gesture_driven[i] == domEventName.toLowerCase()) {
+        isGestureDriven = true;
+      }
+    }
+    return {
+      restrict: 'A',
+      link: function($scope, $element, $attr) {
+        var capitalized = domEventName[0].toUpperCase() + domEventName.slice(1);
+        // Grab event name we will send
+        var eventName = $attr['ionTrack' + capitalized];
+
+        if(isGestureDriven) {
+          var gesture = $ionicGesture.on(domEventName, handler, $element);
+          $scope.$on('$destroy', function() {
+            $ionicGesture.off(gesture, domEventName, handler);
+          });
+        } else {
+          $element.on(domEventName, handler);
+          $scope.$on('$destroy', function() {
+            $element.off(domEventName, handler);
+          });
+        }
+
+
+        function handler(e) {
+          var eventData = $scope.$eval($attr.ionTrackData) || {};
+          if(eventName) {
+            $ionicTrack.track(eventName, eventData);
+          } else {
+            $ionicTrack.trackClick(e.pageX, e.pageY, e.target, {
+              data: eventData
+              //scope: scopeClean(angular.element(e.target).scope())
+            });
+          }
+        }
+      }
+    }
+  }];
+}
