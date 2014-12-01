@@ -4061,7 +4061,7 @@ function($q, $timeout, $state, $ionicApp, $ionicUser, $ionicAnalytics, $interval
 
 .directive('ionTrackClick', ionTrackDirective('click'))
 .directive('ionTrackTap', ionTrackDirective('tap'))
-.directive('ionTrackDoubleTap', ionTrackDirective('doubletap'))
+.directive('ionTrackDoubletap', ionTrackDirective('doubletap'))
 .directive('ionTrackHold', ionTrackDirective('hold'))
 .directive('ionTrackRelease', ionTrackDirective('release'))
 .directive('ionTrackDrag', ionTrackDirective('drag'))
