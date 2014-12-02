@@ -4,499 +4,638 @@
  * See LICENSE in this repository for license information
  */
 (function(){
-  // Source: src/_intro.js
-!function(name, context, definition){
-  if (typeof define == "function" && define.amd) {
-    // Register ID to avoid anonymous define() errors
-    define("keen", [], function(){
-      return definition();
-    });
+!function(name, context, definition){if (typeof define == "function" && define.amd) {define("keen", [], function(lib){ return definition(); });}if ( typeof module === "object" && typeof module.exports === "object" ) {module.exports = definition();} else {context[name] = definition();}}("Keen", this, function(Keen) {"use strict";
+
+/*!
+ * ----------------------
+ * Keen IO Core
+ * ----------------------
+ */
+
+function Keen(config) {
+  this.configure(config || {});
+}
+
+Keen.version = "3.1.0"; // replaced
+
+Keen.utils = {};
+
+Keen.canXHR = false;
+if (typeof XMLHttpRequest === "object" || typeof XMLHttpRequest === "function") {
+  if ("withCredentials" in new XMLHttpRequest()) {
+    Keen.canXHR = true;
   }
-  if ( typeof module === "object" && typeof module.exports === "object" ) {
-    module.exports = definition();
+}
+
+Keen.urlMaxLength = 16000;
+if (navigator.userAgent.indexOf('MSIE') !== -1 || navigator.appVersion.indexOf('Trident/') > 0) {
+  Keen.urlMaxLength = 2000;
+}
+
+Keen.enabled = true;
+
+Keen.loaded = true;
+Keen.ready = function(callback){
+  if (Keen.loaded) {
+    callback();
   } else {
-    context[name] = definition();
+    Keen.on('ready', callback);
   }
+};
 
-}("Keen", this, function(){
-  "use strict";
-
-  // Source: src/core.js
-  /*!
-  * ----------------
-  * Keen IO Core JS
-  * ----------------
-  */
-
-  function Keen(config) {
-    return _init.apply(this, arguments);
+Keen.debug = false;
+Keen.log = function(message) {
+  if (Keen.debug && typeof console == "object") {
+    console.log('[Keen IO]', message);
   }
+};
 
-  function _init(config) {
-    if (_isUndefined(config)) {
-      throw new Error("Check out our JavaScript SDK Usage Guide: https://keen.io/docs/clients/javascript/usage-guide/");
+var Events = Keen.Events = {
+  on: function(name, callback) {
+    this.listeners || (this.listeners = {});
+    var events = this.listeners[name] || (this.listeners[name] = []);
+    events.push({callback: callback});
+    return this;
+  },
+  once: function(name, callback, context) {
+    var self = this;
+    var once = _once(function() {
+      self.off(name, once);
+      callback.apply(this, arguments);
+    });
+    once._callback = callback;
+    return self.on(name, once, context);
+  },
+  off: function(name, callback, context) {
+    if (!this.listeners) return this;
+
+    // Remove all callbacks for all events.
+    if (!name && !callback && !context) {
+      this.listeners = void 0;
+      return this;
     }
-    if (_isUndefined(config.projectId) || _type(config.projectId) !== 'String' || config.projectId.length < 1) {
-      throw new Error("Please provide a projectId");
+
+    var names = [];
+    if (name) {
+      names.push(name);
+    } else {
+      _each(this.listeners, function(value, key){
+        names.push(key);
+      });
     }
 
-    this.configure(config);
-  }
+    for (var i = 0, length = names.length; i < length; i++) {
+      name = names[i];
 
-  Keen.prototype.configure = function(config){
+      // Bail out if there are no events stored.
+      var events = this.listeners[name];
+      if (!events) continue;
 
-    config['host'] = (_isUndefined(config['host'])) ? 'api.keen.io/3.0' : config['host'].replace(/.*?:\/\//g, '');
-    config['protocol'] = _set_protocol(config['protocol']);
-    config['requestType'] = _set_request_type(config['requestType']);
+      // Remove all callbacks for this event.
+      if (!callback && !context) {
+        delete this.listeners[name];
+        continue;
+      }
 
-    this.client = {
-      projectId: config.projectId,
-      writeKey: config.writeKey,
-      readKey: config.readKey,
-      globalProperties: null,
+      // Find any remaining events.
+      var remaining = [];
+      for (var j = 0, k = events.length; j < k; j++) {
+        var event = events[j];
+        if (
+          callback && callback !== event.callback &&
+          callback !== event.callback._callback ||
+          context && context !== event.context
+        ) {
+          remaining.push(event);
+        }
+      }
 
-      endpoint: config['protocol'] + "://" + config['host'],
-      requestType: config['requestType']
-    };
-
-    Keen.trigger('client', this, config);
-    this.trigger('ready');
+      // Replace events if there are any remaining.  Otherwise, clean up.
+      if (remaining.length) {
+        this.listeners[name] = remaining;
+      } else {
+        delete this.listeners[name];
+      }
+    }
 
     return this;
+  },
+  trigger: function(name) {
+    if (!this.listeners) return this;
+    var args = Array.prototype.slice.call(arguments, 1);
+    var events = this.listeners[name] || [];
+    for (var i = 0; i < events.length; i++) {
+      events[i]['callback'].apply(this, args);
+    }
+    return this;
+  }
+};
+
+function _once(func) {
+  var ran = false, memo;
+  return function() {
+    if (ran) return memo;
+    ran = true;
+    memo = func.apply(this, arguments);
+    func = null;
+    return memo;
+  };
+}
+
+_extend(Keen.prototype, Events);
+_extend(Keen, Events);
+
+function _loadAsync(){
+  var loaded = window['Keen'],
+      cached = window['_' + 'Keen'] || {},
+      clients,
+      ready;
+
+  if (loaded && cached) {
+    clients = cached['clients'] || {},
+    ready = cached['ready'] || [];
+
+    for (var instance in clients) {
+      if (clients.hasOwnProperty(instance)) {
+        var client = clients[instance];
+
+        // Map methods to existing instances
+        for (var method in Keen.prototype) {
+          if (Keen.prototype.hasOwnProperty(method)) {
+            loaded.prototype[method] = Keen.prototype[method];
+          }
+        }
+
+        // Map additional methods as necessary
+        loaded.Query = (Keen.Query) ? Keen.Query : function(){};
+        loaded.Visualization = (Keen.Visualization) ? Keen.Visualization : function(){};
+
+        // Run Configuration
+        if (client._config) {
+          client.configure.call(client, client._config);
+          client._config = undefined;
+          try{
+            delete client._config;
+          }catch(e){}
+        }
+
+        // Add Global Properties
+        if (client._setGlobalProperties) {
+          var globals = client._setGlobalProperties;
+          for (var i = 0; i < globals.length; i++) {
+            client.setGlobalProperties.apply(client, globals[i]);
+          }
+          client._setGlobalProperties = undefined;
+          try{
+            delete client._setGlobalProperties;
+          }catch(e){}
+        }
+
+        // Send Queued Events
+        if (client._addEvent) {
+          var queue = client._addEvent || [];
+          for (var i = 0; i < queue.length; i++) {
+            client.addEvent.apply(client, queue[i]);
+          }
+          client._addEvent = undefined;
+          try{
+            delete client._addEvent;
+          }catch(e){}
+        }
+
+        // Create "on" Events
+        var callback = client._on || [];
+        if (client._on) {
+          for (var i = 0; i < callback.length; i++) {
+            client.on.apply(client, callback[i]);
+          }
+          client.trigger('ready');
+          client._on = undefined;
+          try{
+            delete client._on;
+          }catch(e){}
+        }
+
+      }
+    }
+
+    for (var i = 0; i < ready.length; i++) {
+      var callback = ready[i];
+      Keen.once('ready', function(){
+        callback();
+      });
+    };
+  }
+}
+
+Keen.prototype.addEvent = function(eventCollection, payload, success, error) {
+  var response;
+  if (!eventCollection || typeof eventCollection !== "string") {
+    response = "Event not recorded: Collection name must be a string";
+    Keen.log(response);
+    if (error) error.call(this, response);
+    return;
+  }
+  _uploadEvent.apply(this, arguments);
+};
+
+Keen.prototype.configure = function(cfg){
+  var config = cfg || {};
+
+  if (!Keen.canXHR && config.requestType === "xhr") {
+    config.requestType = "jsonp";
+  }
+
+  if (config["host"]) {
+    config["host"].replace(/.*?:\/\//g, '');
+  }
+
+  if (config.protocol && config.protocol === "auto") {
+    config["protocol"] = location.protocol.replace(/:/g, '');
+  }
+
+  this.config = {
+    projectId   : config.projectId,
+    writeKey    : config.writeKey,
+    readKey     : config.readKey,
+    masterKey   : config.masterKey,
+    requestType : config.requestType || "jsonp",
+    host        : config["host"]     || "api.keen.io/3.0",
+    protocol    : config["protocol"] || "https",
+    globalProperties: null
   };
 
+  this.trigger('ready');
+  Keen.trigger('client', this, config);
+};
 
-  // Private
-  // --------------------------------
+Keen.prototype.masterKey = function(str){
+  if (!arguments.length) return this.config.masterKey;
+  this.config.masterKey = (str ? String(str) : null);
+  return this;
+};
 
-  function _extend(target){
-    for (var i = 1; i < arguments.length; i++) {
-      for (var prop in arguments[i]){
-        // if ((target[prop] && _type(target[prop]) == 'Object') && (arguments[i][prop] && _type(arguments[i][prop]) == 'Object')){
-        target[prop] = arguments[i][prop];
+Keen.prototype.projectId = function(str){
+  if (!arguments.length) return this.config.projectId;
+  this.config.projectId = (str ? String(str) : null);
+  return this;
+};
+
+Keen.prototype.readKey = function(str){
+  if (!arguments.length) return this.config.readKey;
+  this.config.readKey = (str ? String(str) : null);
+  return this;
+};
+
+Keen.prototype.setGlobalProperties = function(newGlobalProperties) {
+  if (newGlobalProperties && typeof(newGlobalProperties) == "function") {
+    this.config.globalProperties = newGlobalProperties;
+  } else {
+    Keen.log('Invalid value for global properties: ' + newGlobalProperties);
+  }
+};
+
+Keen.prototype.trackExternalLink = function(jsEvent, eventCollection, payload, timeout, timeoutCallback){
+
+  var evt = jsEvent,
+      target = (evt.currentTarget) ? evt.currentTarget : (evt.srcElement || evt.target),
+      timer = timeout || 500,
+      triggered = false,
+      targetAttr = "",
+      callback,
+      win;
+
+  if (target.getAttribute !== void 0) {
+    targetAttr = target.getAttribute("target");
+  } else if (target.target) {
+    targetAttr = target.target;
+  }
+
+  if ((targetAttr == "_blank" || targetAttr == "blank") && !evt.metaKey) {
+    win = window.open("about:blank");
+    win.document.location = target.href;
+  }
+
+  if (target.nodeName === "A") {
+    callback = function(){
+      if(!triggered && !evt.metaKey && (targetAttr !== "_blank" && targetAttr !== "blank")){
+        triggered = true;
+        window.location = target.href;
+      }
+    };
+  } else if (target.nodeName === "FORM") {
+    callback = function(){
+      if(!triggered){
+        triggered = true;
+        target.submit();
+      }
+    };
+  } else {
+    Keen.log("#trackExternalLink method not attached to an <a> or <form> DOM element");
+  }
+
+  if (timeoutCallback) {
+    callback = function(){
+      if(!triggered){
+        triggered = true;
+        timeoutCallback();
+      }
+    };
+  }
+  _uploadEvent.call(this, eventCollection, payload, callback, callback);
+
+  setTimeout(callback, timer);
+
+  if (!evt.metaKey) {
+    return false;
+  }
+};
+
+Keen.prototype.url = function(path){
+  return this.config.protocol + "://" + this.config.host + path;
+};
+
+Keen.prototype.writeKey = function(str){
+  if (!arguments.length) return this.config.writeKey;
+  this.config.writeKey = (str ? String(str) : null);
+  return this;
+};
+
+function _clone(target) {
+  return JSON.parse(JSON.stringify(target));
+}
+function _each(o, cb, s){
+  var n;
+  if (!o){
+    return 0;
+  }
+  s = !s ? o : s;
+  if (o instanceof Array){
+    // Indexed arrays, needed for Safari
+    for (n=0; n<o.length; n++) {
+      if (cb.call(s, o[n], n, o) === false){
+        return 0;
       }
     }
-    return target;
-  }
-
-  function _isUndefined(obj) {
-    return obj === void 0;
-  }
-
-  function _type(obj){
-    var text, parsed;
-    text = (obj && obj.constructor) ? obj.constructor.toString() : void 0;
-    if (text) {
-      parsed = text.split("(")[0].split(/function\s*/);
-      if (parsed.length > 0) {
-        return parsed[1];
-      }
-    }
-    return "Null";
-	  //return (text) ? text.match(/function (.*)\(/)[1] : "Null";
-  }
-
-  function _each(o, cb, s){
-    var n;
-    if (!o){
-      return 0;
-    }
-    s = !s ? o : s;
-    if (_type(o)==='array'){ // is(o.length)
-      // Indexed arrays, needed for Safari
-      for (n=0; n<o.length; n++) {
+  } else {
+    // Hashtables
+    for (n in o){
+      if (o.hasOwnProperty(n)) {
         if (cb.call(s, o[n], n, o) === false){
           return 0;
         }
       }
-    } else {
-      // Hashtables
-      for (n in o){
-        if (o.hasOwnProperty(n)) {
-          if (cb.call(s, o[n], n, o) === false){
-            return 0;
-          }
-        }
-      }
     }
-    return 1;
   }
+  return 1;
+}
+_extend(Keen.utils, { each: _each });
 
-  function _once(func) {
-    var ran = false, memo;
-    return function() {
-      if (ran) return memo;
-      ran = true;
-      memo = func.apply(this, arguments);
-      func = null;
-      return memo;
+function _extend(target){
+  for (var i = 1; i < arguments.length; i++) {
+    for (var prop in arguments[i]){
+      target[prop] = arguments[i][prop];
+    }
+  }
+  return target;
+}
+_extend(Keen.utils, { extend: _extend });
+
+function _parseParams(str){
+  // via: http://stackoverflow.com/a/2880929/2511985
+  var urlParams = {},
+      match,
+      pl     = /\+/g,  // Regex for replacing addition symbol with a space
+      search = /([^&=]+)=?([^&]*)/g,
+      decode = function (s) { return decodeURIComponent(s.replace(pl, " ")); },
+      query  = str.split("?")[1];
+
+  while (!!(match=search.exec(query))) {
+    urlParams[decode(match[1])] = decode(match[2]);
+  }
+  return urlParams;
+}
+_extend(Keen.utils, { parseParams: _parseParams });
+
+function _sendBeacon(url, params, success, error){
+  var successCallback = success,
+      errorCallback = error,
+      loaded = false,
+      img = document.createElement("img");
+
+  success = null;
+  error = null;
+
+  img.onload = function() {
+    loaded = true;
+    if ('naturalHeight' in this) {
+      if (this.naturalHeight + this.naturalWidth === 0) {
+        this.onerror();
+        return;
+      }
+    } else if (this.width + this.height === 0) {
+      this.onerror();
+      return;
+    }
+    if (successCallback) {
+      successCallback({created: true});
+      successCallback = errorCallback = null;
+    }
+  };
+  img.onerror = function() {
+    loaded = true;
+    if (errorCallback) {
+      errorCallback();
+      successCallback = errorCallback = null;
+    }
+  };
+  img.src = url + "&c=clv1";
+}
+
+function _sendJsonp(url, params, success, error){
+  var timestamp = new Date().getTime(),
+      successCallback = success,
+      errorCallback = error,
+      script = document.createElement("script"),
+      parent = document.getElementsByTagName("head")[0],
+      callbackName = "keenJSONPCallback",
+      loaded = false;
+
+  success = null;
+  error = null;
+
+  callbackName += timestamp;
+  while (callbackName in window) {
+    callbackName += "a";
+  }
+  window[callbackName] = function(response) {
+    if (loaded === true) return;
+    loaded = true;
+    if (successCallback && response) {
+      successCallback(response);
     };
+    cleanup();
+  };
+
+  script.src = url + "&jsonp=" + callbackName;
+  parent.appendChild(script);
+
+  // for early IE w/ no onerror event
+  script.onreadystatechange = function() {
+    if (loaded === false && this.readyState === "loaded") {
+      loaded = true;
+      if (errorCallback) {
+        errorCallback();
+      }
+    }
+  };
+
+  // non-ie, etc
+  script.onerror = function() {
+    // on IE9 both onerror and onreadystatechange are called
+    if (loaded === false) {
+      loaded = true;
+      if (errorCallback) {
+        errorCallback();
+      }
+      cleanup();
+    }
+  };
+
+  function cleanup(){
+    window[callbackName] = undefined;
+    try{
+      delete window[callbackName];
+    }catch(e){}
+    successCallback = errorCallback = null;
+    parent.removeChild(script);
+  }
+}
+
+function _sendXhr(method, url, headers, body, success, error){
+  var ids = ['MSXML2.XMLHTTP.3.0', 'MSXML2.XMLHTTP', 'Microsoft.XMLHTTP'],
+      successCallback = success,
+      errorCallback = error,
+      payload,
+      xhr;
+
+  success = null;
+  error = null;
+
+  if (window.XMLHttpRequest) {
+    xhr = new XMLHttpRequest();
+  }
+  else {
+    // Legacy IE support: look up alts if XMLHttpRequest is not available
+    for (var i = 0; i < ids.length; i++) {
+      try {
+        xhr = new ActiveXObject(ids[i]);
+        break;
+      } catch(e) {}
+    }
   }
 
-  function _parse_params(str){
-    // via http://stackoverflow.com/a/2880929/2511985
-    var urlParams = {},
-        match,
-        pl     = /\+/g,  // Regex for replacing addition symbol with a space
-        search = /([^&=]+)=?([^&]*)/g,
-        decode = function (s) { return decodeURIComponent(s.replace(pl, " ")); },
-        query  = str.split("?")[1];
-
-    while (!!(match=search.exec(query))) {
-      urlParams[decode(match[1])] = decode(match[2]);
-    }
-    return urlParams;
-  }
-
-  function _set_protocol(value) {
-    switch(value) {
-      case 'http':
-        return 'http';
-        break;
-      case 'auto':
-        return location.protocol.replace(/:/g, '');
-        break;
-      case 'https':
-      case undefined:
-      default:
-        return 'https';
-        break;
-    }
-  }
-
-  function _set_request_type(value) {
-    var configured = value || 'jsonp';
-    var capableXHR = false;
-    //if ((typeof XMLHttpRequest === 'object' || typeof XMLHttpRequest === 'function') && 'withCredentials' in new XMLHttpRequest()) {
-    if ((_type(XMLHttpRequest)==='Object'||_type(XMLHttpRequest)==='Function') && 'withCredentials' in new XMLHttpRequest()) {
-      capableXHR = true;
-    }
-    //var capableXHR = (void 0 !== XMLHttpRequest && 'withCredentials' in new XMLHttpRequest());
-
-    if (configured == null || configured == 'xhr') {
-      if (capableXHR) {
-        return 'xhr';
+  xhr.onreadystatechange = function() {
+    var response;
+    if (xhr.readyState == 4) {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          response = JSON.parse(xhr.responseText);
+        } catch (e) {
+          Keen.log("Could not parse HTTP response: " + xhr.responseText);
+          if (errorCallback) {
+            errorCallback(xhr, e);
+            successCallback = errorCallback = null;
+          }
+        }
+        if (successCallback && response) {
+          successCallback(response);
+          successCallback = errorCallback = null;
+        }
       } else {
-        return 'jsonp';
+        Keen.log("HTTP request failed.");
+        if (errorCallback) {
+          errorCallback(xhr, null);
+          successCallback = errorCallback = null;
+        }
       }
-    } else {
-      return configured;
     }
+  };
+
+  xhr.open(method, url, true);
+
+  _each(headers, function(value, key){
+    xhr.setRequestHeader(key, value);
+  });
+
+  if (body) {
+    payload = JSON.stringify(body);
   }
 
-  function _build_url(path) {
-    return this.client.endpoint + '/projects/' + this.client.projectId + path;
+  if (method && method.toUpperCase() === "GET") {
+    xhr.send();
+  } else if (method && method.toUpperCase() === "POST") {
+    xhr.send(payload);
   }
 
+}
 
-  var _request = {
+function _uploadEvent(eventCollection, payload, success, error) {
+  var urlBase, urlQueryString, reqType, data;
 
-    xhr: function(method, url, headers, body, apiKey, success, error){
-      if (!apiKey) return Keen.log('Please provide a writeKey for https://keen.io/project/' + this.client.projectId);
-      var xhr = new XMLHttpRequest();
-      xhr.onreadystatechange = function () {
-        if (xhr.readyState == 4) {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            var response;
-            try {
-              response = JSON.parse(xhr.responseText);
-            } catch (e) {
-              Keen.log("Could not JSON parse HTTP response: " + xhr.responseText);
-              if (error) error(xhr, e);
-            }
-            if (success && response) success(response);
-          } else {
-            Keen.log("HTTP request failed.");
-            if (error) error(xhr, null);
-          }
-        }
-      };
-      xhr.open(method, url, true);
-      if (apiKey) xhr.setRequestHeader("Authorization", apiKey);
-      if (body) xhr.setRequestHeader("Content-Type", "application/json");
-      if (headers) {
-        for (var headerName in headers) {
-          if (headers.hasOwnProperty(headerName)) xhr.setRequestHeader(headerName, headers[headerName]);
-        }
+  if (!Keen.enabled) {
+    Keen.log("Event not recorded: Keen.enabled = false");
+    return;
+  }
+
+  if (!this.projectId()) {
+    Keen.log("Event not recorded: Missing projectId property");
+    return;
+  }
+
+  if (!this.writeKey()) {
+    Keen.log("Event not recorded: Missing writeKey property");
+    return;
+  }
+
+  urlBase = this.url("/projects/" + this.projectId() + "/events/" + eventCollection);
+  urlQueryString = "";
+  reqType = this.config.requestType;
+  data = {};
+
+  // Add properties from client.globalProperties
+  if (this.config.globalProperties) {
+    data = this.config.globalProperties(eventCollection);
+  }
+
+  // Add properties from user-defined event
+  _each(payload, function(value, key){
+    data[key] = value;
+  });
+
+  if (reqType !== "xhr") {
+    urlQueryString += "?api_key="  + encodeURIComponent( this.writeKey() );
+    urlQueryString += "&data="     + encodeURIComponent( Keen.Base64.encode( JSON.stringify(data) ) );
+    urlQueryString += "&modified=" + encodeURIComponent( new Date().getTime() );
+
+    if ( String(urlBase + urlQueryString).length < Keen.urlMaxLength ) {
+      if (reqType === "jsonp") {
+        _sendJsonp(urlBase + urlQueryString, null, success, error);
+      } else {
+        _sendBeacon(urlBase + urlQueryString, null, success, error);
       }
-      var toSend = body ? JSON.stringify(body) : null;
-      xhr.send(toSend);
-    },
-
-    jsonp: function(url, apiKey, success, error){
-      if (!apiKey) return Keen.log('Please provide a writeKey for https://keen.io/project/' + this.client.projectId);
-      if (apiKey && url.indexOf("api_key") < 0) {
-        var delimiterChar = url.indexOf("?") > 0 ? "&" : "?";
-        url = url + delimiterChar + "api_key=" + apiKey;
-      }
-
-      var callbackName = "keenJSONPCallback" + new Date().getTime();
-      while (callbackName in window) {
-        callbackName += "a";
-      }
-      var loaded = false;
-      window[callbackName] = function (response) {
-        loaded = true;
-        if (success && response) {
-          success(response);
-        };
-        // Remove this from the namespace
-        window[callbackName] = undefined;
-      };
-      url = url + "&jsonp=" + callbackName;
-      var script = document.createElement("script");
-      script.id = "keen-jsonp";
-      script.src = url;
-      document.getElementsByTagName("head")[0].appendChild(script);
-      // for early IE w/ no onerror event
-      script.onreadystatechange = function() {
-        if (loaded === false && this.readyState === "loaded") {
-          loaded = true;
-          if (error) error();
-        }
-      }
-      // non-ie, etc
-      script.onerror = function() {
-        if (loaded === false) { // on IE9 both onerror and onreadystatechange are called
-          loaded = true;
-          if (error) error();
-        }
-      }
-    },
-
-    beacon: function(url, apiKey, success, error){
-      if (apiKey && url.indexOf("api_key") < 0) {
-        var delimiterChar = url.indexOf("?") > 0 ? "&" : "?";
-        url = url + delimiterChar + "api_key=" + apiKey;
-      }
-      var loaded = false, img = document.createElement("img");
-      img.onload = function() {
-        loaded = true;
-        if ('naturalHeight' in this) {
-          if (this.naturalHeight + this.naturalWidth === 0) {
-            this.onerror(); return;
-          }
-        } else if (this.width + this.height === 0) {
-          this.onerror(); return;
-        }
-        if (success) success({created: true});
-      };
-      img.onerror = function() {
-        loaded = true;
-        if (error) error();
-      };
-      img.src = url;
+      return;
     }
-  };
+  }
+  if (Keen.canXHR) {
+    _sendXhr("POST", urlBase, { "Authorization": this.writeKey(), "Content-Type": "application/json" }, data, success, error);
+  } else {
+    Keen.log("Event not sent: URL length exceeds current browser limit, and XHR (POST) is not supported.");
+  }
+  return;
+};
 
-
-  // -------------------------------
-  // Keen.Events
-  // (Based heavily on backbone.js!)
-  // -------------------------------
-
-  var Events = Keen.Events = {
-    on: function(name, callback) {
-      this.listeners || (this.listeners = {});
-      var events = this.listeners[name] || (this.listeners[name] = []);
-      events.push({callback: callback});
-      return this;
-    },
-    once: function(name, callback, context) {
-      var self = this;
-      var once = _once(function() {
-        self.off(name, once);
-        callback.apply(this, arguments);
-      });
-      once._callback = callback;
-      return self.on(name, once, context);
-    },
-    off: function(name, callback) {
-      if (!name && !callback) {
-        this.listeners = void 0;
-        delete this.listeners;
-        return this;
-      }
-      var events = this.listeners[name] || [];
-      for (var i = events.length; i--;) {
-        if (callback && callback == events[i]['callback']) {
-          this.listeners[name].splice(i, 1);
-        }
-        if (!callback || events.length == 0) {
-          this.listeners[name] = void 0;
-          delete this.listeners[name];
-        }
-      }
-      return this;
-    },
-    trigger: function(name) {
-      if (!this.listeners) return this;
-      var args = Array.prototype.slice.call(arguments, 1);
-      var events = this.listeners[name] || [];
-      for (var i = 0; i < events.length; i++) {
-        events[i]['callback'].apply(this, args);
-      }
-      return this;
-    }
-  };
-  _extend(Keen.prototype, Events);
-  _extend(Keen, Events);
-
-  Keen.loaded = true;
-
-  // Expose utils
-  Keen.utils = {
-    each: _each,
-    extend: _extend,
-    parseParams: _parse_params
-  };
-
-  Keen.ready = function(callback){
-    if (Keen.loaded) {
-      callback();
-    } else {
-      Keen.on('ready', callback);
-    }
-  };
-
-  Keen.log = function(message) {
-    if (typeof console == "object") {
-      console.log('[Keen IO]', message);
-    }
-  };
-
-  // -------------------------------
-  // Keen.Plugins
-  // -------------------------------
-
-  var Plugins = Keen.Plugins = {};
-
-  // Source: src/track.js
-  /*!
-  * -------------------
-  * Keen IO Tracker JS
-  * -------------------
-  */
-
-  Keen.prototype.addEvent = function(eventCollection, payload, success, error) {
-    _uploadEvent.apply(this, arguments);
-  };
-
-  Keen.prototype.trackExternalLink = function(jsEvent, eventCollection, payload, timeout, timeoutCallback){
-
-    var evt = jsEvent,
-        target = (evt.currentTarget) ? evt.currentTarget : (evt.srcElement || evt.target),
-        timer = timeout || 500,
-        triggered = false,
-        targetAttr = "",
-        callback,
-        win;
-
-    if (target.getAttribute !== void 0) {
-      targetAttr = target.getAttribute("target");
-    } else if (target.target) {
-      targetAttr = target.target;
-    }
-
-    if ((targetAttr == "_blank" || targetAttr == "blank") && !evt.metaKey) {
-      win = window.open("about:blank");
-      win.document.location = target.href;
-    }
-
-    if (target.nodeName === "A") {
-      callback = function(){
-        if(!triggered && !evt.metaKey && (targetAttr !== "_blank" && targetAttr !== "blank")){
-          triggered = true;
-          window.location = target.href;
-        }
-      };
-    } else if (target.nodeName === "FORM") {
-      callback = function(){
-        if(!triggered){
-          triggered = true;
-          target.submit();
-        }
-      };
-    } else {
-      Keen.log("#trackExternalLink method not attached to an <a> or <form> DOM element");
-    }
-
-    if (timeoutCallback) {
-      callback = function(){
-        if(!triggered){
-          triggered = true;
-          timeoutCallback();
-        }
-      };
-    }
-    _uploadEvent.call(this, eventCollection, payload, callback, callback);
-
-    setTimeout(callback, timer);
-
-    if (!evt.metaKey) {
-      return false;
-    }
-  };
-
-  Keen.prototype.setGlobalProperties = function(newGlobalProperties) {
-    if (!this.client) return Keen.log('Check out our JavaScript SDK Usage Guide: https://keen.io/docs/clients/javascript/usage-guide/');
-    if (newGlobalProperties && typeof(newGlobalProperties) == "function") {
-      this.client.globalProperties = newGlobalProperties;
-    } else {
-      throw new Error('Invalid value for global properties: ' + newGlobalProperties);
-    }
-  };
-
-  // Private for Keen IO Tracker JS
-  // -------------------------------
-
-  function _uploadEvent(eventCollection, payload, success, error) {
-    var url = _build_url.apply(this, ['/events/' + eventCollection]);
-    var newEvent = {};
-
-    // Add properties from client.globalProperties
-    if (this.client.globalProperties) {
-      newEvent = this.client.globalProperties(eventCollection);
-    }
-
-    // Add properties from user-defined event
-    for (var property in payload) {
-      if (payload.hasOwnProperty(property)) {
-        newEvent[property] = payload[property];
-      }
-    }
-
-    // Send data
-    switch(this.client.requestType){
-
-      case 'xhr':
-        _request.xhr.apply(this, ["POST", url, null, newEvent, this.client.writeKey, success, error]);
-        break;
-
-      case 'jsonp':
-        var jsonBody = JSON.stringify(newEvent);
-        var base64Body = Keen.Base64.encode(jsonBody);
-        url = url + "?api_key=" + this.client.writeKey;
-        url = url + "&data=" + encodeURIComponent(base64Body);
-        url = url + "&modified=" + new Date().getTime();
-        _request.jsonp.apply(this, [url, this.client.writeKey, success, error])
-        break;
-
-      case 'beacon':
-        var jsonBody = JSON.stringify(newEvent);
-        var base64Body = Keen.Base64.encode(jsonBody);
-        url = url + "?api_key=" + encodeURIComponent(this.client.writeKey);
-        url = url + "&data=" + encodeURIComponent(base64Body);
-        url = url + "&modified=" + encodeURIComponent(new Date().getTime());
-        url = url + "&c=clv1";
-        _request.beacon.apply(this, [url, null, success, error]);
-        break;
-
-    }
-  };
-
-  // Source: src/lib/base64.js
-  /*!
+/*!
   * ----------------------------------------
   * Keen IO Base64 Transcoding
   * ----------------------------------------
@@ -549,8 +688,7 @@
     }
   };
 
-  // Source: src/lib/json2.js
-  /*! 
+/*! 
   * --------------------------------------------
   * JSON2.js
   * https://github.com/douglascrockford/JSON-js
@@ -823,13 +961,9 @@
       };
     }
   }());
-  // Source: src/lib/keen-domready.js
 /*!
   * domready (c) Dustin Diaz 2012 - License MIT
-  */
-// Modified header to work internally w/ Keen lib
-/*!
-  * domready (c) Dustin Diaz 2012 - License MIT
+  * Modified header to work internally w/ Keen lib
   */
 (function(root, factory) {
   root.utils.domready = factory();
@@ -881,101 +1015,11 @@
       loaded ? fn() : fns.push(fn)
     })
 }));
+if (Keen.loaded) {setTimeout(function(){Keen.utils.domready(function(){Keen.trigger("ready");});}, 0);}_loadAsync();
 
-  // Source: src/async.js
-  /*!
-  * ----------------------
-  * Keen IO Plugin
-  * Async Loader
-  * ----------------------
-  */
+return Keen; 
 
-  var loaded = window['Keen'],
-      cached = window['_' + 'Keen'] || {},
-      clients,
-      ready;
-
-  if (loaded && cached) {
-    clients = cached['clients'] || {},
-    ready = cached['ready'] || [];
-
-    for (var instance in clients) {
-      if (clients.hasOwnProperty(instance)) {
-        var client = clients[instance];
-
-        // Map methods to existing instances
-        for (var method in Keen.prototype) {
-          if (Keen.prototype.hasOwnProperty(method)) {
-            loaded.prototype[method] = Keen.prototype[method];
-          }
-        }
-
-        // Map additional methods as necessary
-        loaded.Query = (Keen.Query) ? Keen.Query : function(){};
-        loaded.Visualization = (Keen.Visualization) ? Keen.Visualization : function(){};
-
-        // Run Configuration
-        if (client._config) {
-          client.configure.call(client, client._config);
-          delete client._config;
-        }
-
-        // Add Global Properties
-        if (client._setGlobalProperties) {
-          var globals = client._setGlobalProperties;
-          for (var i = 0; i < globals.length; i++) {
-            client.setGlobalProperties.apply(client, globals[i]);
-          }
-          delete client._setGlobalProperties;
-        }
-
-        // Send Queued Events
-        if (client._addEvent) {
-          var queue = client._addEvent || [];
-          for (var i = 0; i < queue.length; i++) {
-            client.addEvent.apply(client, queue[i]);
-          }
-          delete client._addEvent;
-        }
-
-        // Create "on" Events
-        var callback = client._on || [];
-        if (client._on) {
-          for (var i = 0; i < callback.length; i++) {
-            client.on.apply(client, callback[i]);
-          }
-          client.trigger('ready');
-          delete client._on;
-        }
-
-      }
-    }
-
-    for (var i = 0; i < ready.length; i++) {
-      var callback = ready[i];
-      Keen.once('ready', function(){
-        callback();
-      });
-    };
-  }
-
-  // Source: src/_outro.js
-
-  // ----------------------
-  // Utility Methods
-  // ----------------------
-
-  if (Keen.loaded) {
-    setTimeout(function(){
-      Keen.utils.domready(function(){
-        Keen.trigger('ready');
-      });
-    }, 0);
-  }
-
-  return Keen;
 });
-
 var IonicServiceAnalyticsModule = angular.module('ionic.services.analytics', ['ionic.services.core']);
 
 IonicServiceAnalyticsModule
