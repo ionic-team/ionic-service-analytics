@@ -976,7 +976,7 @@
   return Keen;
 });
 
-var IonicServiceAnalyticsModule = angular.module('ionic.services.analytics', ['ionic.services.common']);
+var IonicServiceAnalyticsModule = angular.module('ionic.services.analytics', ['ionic.services.core']);
 
 IonicServiceAnalyticsModule
 

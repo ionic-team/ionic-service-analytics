@@ -4,11 +4,11 @@
     <meta charset="utf-8">
     <meta name="viewport" content="initial-scale=1, maximum-scale=1, user-scalable=no, width=device-width">
 
-    <title>Sample UL</title>
+    <title>Analytics Demo</title>
     <link href="../ionic/dist/css/ionic.css" rel="stylesheet">
     <script src="../ionic/dist/js/ionic.bundle.js"></script>
 
-    <script src="../ionic-service-common/ionicCore.js"></script>
+    <script src="../ionic-service-core/ionic-core.js"></script>
     <script src="ionic-analytics.js"></script>
   </head>
   <body ng-app="myApp" ng-controller="MyCtrl" ion-track-auto>
@@ -70,7 +70,7 @@
     </script>
 
     <script>
-      angular.module('myApp', ['ionic', 'ionic.services.analytics', 'ionic.services.common'])
+      angular.module('myApp', ['ionic', 'ionic.services.analytics'])
 
       .run(function($ionicPlatform) {
         $ionicPlatform.ready(function() {
