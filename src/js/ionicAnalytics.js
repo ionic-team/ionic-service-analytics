@@ -423,10 +423,10 @@ function($q, $timeout, $state, $ionicApp, $ionicUser, $ionicAnalytics, $interval
       }
 
       if (useEventCaching) {
-        enqueueEvent(app.app_id + '-' + eventName, data);
+        enqueueEvent(eventName, data);
       } else {
         console.log('Immediate event dispatch', eventName, data);
-        $ionicAnalytics.getClient().addEvent(app.app_id + '-' + eventName, data);
+        $ionicAnalytics.getClient().addEvent(eventName, data);
       }
     },
     track: function(eventName, data) {
