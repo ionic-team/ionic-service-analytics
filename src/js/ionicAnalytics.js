@@ -45,17 +45,44 @@ IonicServiceAnalyticsModule
   });
 }])
 
+/**
+ * @private
+ * Provide base-level interface for sending events to the analytics server.
+ * Use addEvent to send a single event, or addEvents to send multiple.
+ * Both functions will return a promise with success and error helper functions.
+ */
 .provider('$ionicAnalytics', function() {
   return {
-    $get: ['$ionicApp', function($ionicApp) {
-      var client = new Keen({
-        projectId: "5377805cd97b857fed00003f",
-        writeKey: $ionicApp.getApiWriteKey()
-      });
+    $get: ['$ionicApp', '$http', function($ionicApp, $http) {
+
+      // Configure api endpoint based on app id
+      var apiEndpoint = 'https://analytics.ionic.io/'
+                      + 'api/v1/events/'
+                      + $ionicApp.getApp().app_id,
+
+          apiKey = $ionicApp.getApiWriteKey();
 
       return {
-        getClient: function() {
-          return client;
+
+
+        addEvent: function(collectionName, eventData) {
+          var payload = {
+            collectionName: [eventData]
+          };
+          return $http.post(apiEndpoint, payload, {
+            headers: {
+              "Authorization": apiKey,
+              "Content-Type": "application/json"
+            }
+          });
+        },
+        addEvents: function(events) {
+          return $http.post(apiEndpoint, events, {
+            headers: {
+              "Authorization": apiKey,
+              "Content-Type": "application/json"
+            }
+          })
         }
       }
     }]
@@ -318,23 +345,15 @@ function($q, $timeout, $state, $ionicApp, $ionicUser, $ionicAnalytics, $interval
     console.log('dipatching queue', eventQueue);
     dispatchInProgress = true;
 
-    // Perform a bulk dispatch of all events in the event queue
-    // https://keen.io/docs/data-collection/bulk-load/
-    var client = $ionicAnalytics.getClient().client,
-        url = client.endpoint + '/projects/' + client.projectId + '/events';
-    $http.post(url, eventQueue, {
-      headers: {
-        "Authorization": client.writeKey,
-        "Content-Type": "application/json"
-      }
-    })
-    .success(function() {
+    $ionicAnalytics.addEvents(eventQueue).success(function() {
+
       // Clear the event queue and write this change to disk.
       eventQueue = {};
       $window.localStorage.setItem('ionic_analytics_event_queue', JSON.stringify(eventQueue));
       dispatchInProgress = false;
-    })
-    .error(function(data, status, headers, config) {
+    }).error(function(data, status, headers, config) {
+
+
       console.log("Error sending tracking data", data, status, headers, config);
       dispatchInProgress = false;
     });
@@ -426,7 +445,7 @@ function($q, $timeout, $state, $ionicApp, $ionicUser, $ionicAnalytics, $interval
         enqueueEvent(eventName, data);
       } else {
         console.log('Immediate event dispatch', eventName, data);
-        $ionicAnalytics.getClient().addEvent(eventName, data);
+        $ionicAnalytics.addEvent(eventName, data);
       }
     },
     track: function(eventName, data) {
