@@ -337,43 +337,82 @@ function($q, $timeout, $state, $ionicApp, $ionicUser, $ionicAnalytics, $interval
            networkState == Connection.CELL;
   }
 
+  function setDispatchLock(locked) {
+    if (locked) {
+      $window.localStorage.setItem('ionic_analytics_event_queue_dispatch_lock', 'locked');
+    } else {
+      $window.localStorage.setItem('ionic_analytics_event_queue_dispatch_lock', '');
+    }
+  }
+
+  function isDispatchLocked() {
+    return !!$window.localStorage.getItem('ionic_analytics_event_queue_dispatch_lock');
+  }
+
   function dispatchQueue() {
     if (Object.keys(eventQueue).length === 0) return;
     if (!connectedToNetwork()) return;
     if (dispatchInProgress) return;
 
-    console.log('dipatching queue', eventQueue);
+    // Make a lock in local storage to prevent double sending
+    // We set this immediately before transmitting the data,
+    // and remove it immediately after we get a response/error.
     dispatchInProgress = true;
+    if (isDispatchLocked()) {
 
-    $ionicAnalytics.addEvents(eventQueue).success(function() {
+      // Analytics data from the last session was transmitted but not removed from storage.
+      eventQueue = {};
+      $window.localStorage.setItem('ionic_analytics_event_queue', '{}');
+    }
+    setDispatchLock(true);
+
+    // Transmit the events to the analytics server
+    $ionicAnalytics.addEvents(eventQueue)
+    .success(function() {
 
       // Clear the event queue and write this change to disk.
       eventQueue = {};
-      $window.localStorage.setItem('ionic_analytics_event_queue', JSON.stringify(eventQueue));
+      $window.localStorage.setItem('ionic_analytics_event_queue', '{}');
+      setDispatchLock(false);
       dispatchInProgress = false;
-    }).error(function(data, status, headers, config) {
+    })
+    .error(function(data, status, headers, config) {
+      // If we didn't connect to the server at all -> keep events
+      if (!status) {
+        console.log('Failed to connect to analytics server.')
+      }
 
+      // If we connected to the server but our events were rejected -> erase events
+      else {
+        console.log('Error from server when trying to send analytics data', eventQueue, {
+          'status': status,
+          'error': data
+        });
+        eventQueue = {};
+        $window.localStorage.setItem('ionic_analytics_event_queue', '{}');
+      }
 
-      console.log("Error sending tracking data", data, status, headers, config);
+      // Either way remove the lock on our data
       dispatchInProgress = false;
+      setDispatchLock(false);
     });
 
   }
 
-  function enqueueEvent(eventName, data) {
-    console.log('enqueueing event', eventName, data);
+  function enqueueEvent(collectionName, eventData) {
+    console.log('enqueueing event', collectionName, eventData);
 
     // Add timestamp property to the data
-    if (!data.keen) {
-      data.keen = {};
+    if (!eventData.keen) {
+      eventData.keen = {};
     }
-    data.keen.timestamp = new Date().toISOString();
+    eventData.keen.timestamp = new Date().toISOString();
 
     // Add the data to the queue
-    if (!eventQueue[eventName]) {
-      eventQueue[eventName] = [];
+    if (!eventQueue[collectionName]) {
+      eventQueue[collectionName] = [];
     }
-    eventQueue[eventName].push(data);
+    eventQueue[collectionName].push(eventData);
 
     // Write the queue to disk
     $window.localStorage.setItem('ionic_analytics_event_queue', JSON.stringify(eventQueue));
