@@ -18,7 +18,5 @@
   "dependencies": {
     "ionic-service-core": ">=0.0.1"
   },
-  "devDependencies": {
-     "keen-js": "~3.0.8"
-   }
+  "devDependencies": {}
 }

@@ -13,7 +13,7 @@ module.exports = {
 
   dist: '.',
 
-  jsFiles: ['lib/keen-js/dist/keen-tracker.js', 'src/js/**/*.js'],
+  jsFiles: ['src/js/**/*.js'],
 
   versionData: {
     version: pkg.version
