@@ -177,6 +177,126 @@ IonicServiceAnalyticsModule
   return clean;
 })
 
+/**
+ * @private
+ * Provides a safe interface to store objects in persistent memory
+ */
+.provider('persistentStorage', function() {
+  return {
+    $get: ['$q', '$window', function($q, $window) {
+      var objectCache = {};
+      var memoryLocks = {};
+
+      var persistenceStrategy = {
+        get: function(key) {
+          return $window.localStorage.getItem(key);
+        },
+        remove: function(key) {
+          return $window.localStorage.removeItem(key);
+        },
+        set: function(key, value) {
+          return $window.localStorage.setItem(key, value);
+        }
+      };
+
+      return {
+        /**
+         * Stores an object in local storage under the given key
+        */
+        storeObject: function(key, object) {
+
+          // Convert object to JSON and store in localStorage
+          var json = JSON.stringify(object);
+          persistenceStrategy.set(key, json);
+
+          // Then store it in the object cache
+          objectCache[key] = object;
+        },
+
+        /**
+         * Either retrieves the cached copy of an object,
+         * or the object itself from localStorage.
+         * Returns null if the object couldn't be found.
+        */
+        retrieveObject: function(key) {
+
+          // First check to see if it's the object cache
+          var cached = objectCache[key];
+          if (cached) {
+            return cached;
+          }
+
+          // Deserialize the object from JSON
+          var json = persistenceStrategy.get(key);
+
+          // null or undefined --> return null.
+          if (json == null) {
+            return null;
+          }
+
+          try {
+            return JSON.parse(json);
+          } catch (err) {
+            return null;
+          }
+        },
+
+        /**
+         * Locks the async call represented by the given promise and lock key.
+         * Only one asyncFunction given by the lockKey can be running at any time.
+         *
+         * @param lockKey should be a string representing the name of this async call.
+         *        This is required for persistence.
+         * @param asyncFunction Returns a promise of the async call.
+         * @returns A new promise, identical to the one returned by asyncFunction,
+         *          but with two new errors: 'in_progress', and 'last_call_interrupted'.
+        */
+        lockedAsyncCall: function(lockKey, asyncFunction) {
+
+          var deferred = $q.defer();
+
+          // If the memory lock is set, error out.
+          if (memoryLocks[lockKey]) {
+            deferred.reject('in_progress');
+            return deferred.promise;
+          }
+
+          // If there is a stored lock but no memory lock, flag a persistence error
+          if (persistenceStrategy.get(lockKey) === 'locked') {
+            deferred.reject('last_call_interrupted');
+            deferred.promise.then(null, function() {
+              persistenceStrategy.remove(lockKey);
+            });
+            return deferred.promise;
+          }
+
+          // Set stored and memory locks
+          memoryLocks[lockKey] = true;
+          persistenceStrategy.set(lockKey, 'locked');
+
+          // Perform the async operation
+          asyncFunction().then(function(successData) {
+            deferred.resolve(successData);
+
+            // Remove stored and memory locks
+            delete memoryLocks[lockKey];
+            persistenceStrategy.remove(lockKey);
+          }, function(errorData) {
+            deferred.reject(errorData);
+
+            // Remove stored and memory locks
+            delete memoryLocks[lockKey];
+            persistenceStrategy.remove(lockKey);
+          }, function(notifyData) {
+            deferred.notify(notifyData);
+          });
+
+          return deferred.promise;
+        }
+      };
+    }]
+  };
+})
 
 /**
  * @ngdoc service
@@ -207,12 +327,12 @@ IonicServiceAnalyticsModule
 .factory('$ionicUser', [
   '$q',
   '$timeout',
-  '$window',
+  'persistentStorage',
   '$ionicApp',
-function($q, $timeout, $window, $ionicApp) {
+function($q, $timeout, persistentStorage, $ionicApp) {
   // User object we'll use to store all our user info
-  var storageKeyName = 'ionic_analytics_user_' + $ionicApp.getApp().app_id;;
-  var user = getObject(storageKeyName) || {};
+  var storageKeyName = 'ionic_analytics_user_' + $ionicApp.getApp().app_id;
+  var user = persistentStorage.retrieveObject(storageKeyName) || {};
 
   // Generate a device and user ids if we don't have them already
   var isUserDirty = false;
@@ -227,7 +347,7 @@ function($q, $timeout, $window, $ionicApp) {
 
   // Write to local storage if we changed anything on our user object
   if (isUserDirty) {
-    storeObject(storageKeyName, user);
+    persistentStorage.storeObject(storageKeyName, user);
   }
 
   function generateGuid() {
@@ -238,32 +358,13 @@ function($q, $timeout, $window, $ionicApp) {
     });
   }
 
-  function storeObject(objectName, object) {
-    // Convert object to JSON and store in localStorage
-    var jsonObj = JSON.stringify(object);
-    $window.localStorage.setItem(objectName, jsonObj);
-  }
-
-  function getObject(objectName) {
-    // Deserialize the object from JSON and return
-    var jsonObj = $window.localStorage.getItem(objectName);
-    if (jsonObj == null) { // null or undefined, return null
-      return null;
-    }
-    try {
-      return JSON.parse(jsonObj);
-    } catch (err) {
-      return null;
-    }
-  }
-
   return {
     identify: function(userData) {
       // Copy all the data into our user object
       angular.extend(user, userData);
 
       // Write the user object to our local storage
-      storeObject(storageKeyName, user);
+      persistentStorage.storeObject(storageKeyName, user);
     },
     get: function() {
       return user;
@@ -302,28 +403,23 @@ function($q, $timeout, $window, $ionicApp) {
   '$ionicUser',
   '$ionicAnalytics',
   '$interval',
-  '$window',
   '$http',
   'domSerializer',
-function($q, $timeout, $state, $ionicApp, $ionicUser, $ionicAnalytics, $interval, $window, $http, domSerializer) {
+  'persistentStorage',
+function($q, $timeout, $state, $ionicApp, $ionicUser, $ionicAnalytics, $interval, $http, domSerializer, persistentStorage) {
   var _types = [];
 
-  var storedQueue = $window.localStorage.getItem('ionic_analytics_event_queue'),
-      eventQueue;
-  try {
-    eventQueue = storedQueue ? JSON.parse(storedQueue) : {};
-  } catch (e) {
-    eventQueue = {};
-  }
+  var queueKey = 'ionic_analytics_event_queue',
+      dispatchKey = 'ionic_analytics_event_queue_dispatch';
 
   var useEventCaching = true,
-      dispatchInProgress = false,
       dispatchInterval,
       dispatchIntervalTime;
   setDispatchInterval(2 * 60);
   $timeout(function() {
     dispatchQueue();
   });
+
 
   function connectedToNetwork() {
     // Can't access navigator stuff? Just assume connected.
@@ -343,66 +439,42 @@ function($q, $timeout, $state, $ionicApp, $ionicUser, $ionicAnalytics, $interval
            networkState == Connection.CELL;
   }
 
-  function setDispatchLock(locked) {
-    if (locked) {
-      $window.localStorage.setItem('ionic_analytics_event_queue_dispatch_lock', 'locked');
-    } else {
-      $window.localStorage.setItem('ionic_analytics_event_queue_dispatch_lock', '');
-    }
-  }
-
-  function isDispatchLocked() {
-    return !!$window.localStorage.getItem('ionic_analytics_event_queue_dispatch_lock');
-  }
-
   function dispatchQueue() {
+    var eventQueue = persistentStorage.retrieveObject(queueKey) || {};
     if (Object.keys(eventQueue).length === 0) return;
     if (!connectedToNetwork()) return;
-    if (dispatchInProgress) return;
 
-    // Make a lock in local storage to prevent double sending
-    // We set this immediately before transmitting the data,
-    // and remove it immediately after we get a response/error.
-    dispatchInProgress = true;
-    if (isDispatchLocked()) {
+    persistentStorage.lockedAsyncCall(dispatchKey, function() {
 
-      // Analytics data from the last session was transmitted but not removed from storage.
-      eventQueue = {};
-      $window.localStorage.setItem('ionic_analytics_event_queue', '{}');
-    }
-    setDispatchLock(true);
+      // Send the analytics data to the proxy server
+      return $ionicAnalytics.addEvents(eventQueue);
+    }).then(function(data) {
 
-    // Transmit the events to the analytics server
-    $ionicAnalytics.addEvents(eventQueue)
-    .success(function() {
+      // Success from proxy server. Erase event queue.
+      persistentStorage.storeObject(queueKey, {});
 
-      // Clear the event queue and write this change to disk.
-      eventQueue = {};
-      $window.localStorage.setItem('ionic_analytics_event_queue', '{}');
-      setDispatchLock(false);
-      dispatchInProgress = false;
-    })
-    .error(function(data, status, headers, config) {
-      // If we didn't connect to the server at all -> keep events
-      if (!status) {
-        console.log('Failed to connect to analytics server.')
+    }, function(err) {
+
+      if (err === 'in_progress') {
+      } else if (err === 'last_call_interrupted') {
+        persistentStorage.storeObject(queueKey, {});
+      } else {
+
+        // If we didn't connect to the server at all -> keep events
+        if (!err.status) {
+          console.log('Error sending analytics data: Failed to connect to analytics server.');
+        }
+
+        // If we connected to the server but our events were rejected -> erase events
+        else {
+          console.log('Error sending analytics data: Server responded with error', eventQueue, {
+            'status': err.status,
+            'error': err.data
+          });
+          persistentStorage.storeObject(queueKey, {});
+        }
       }
-
-      // If we connected to the server but our events were rejected -> erase events
-      else {
-        console.log('Error from server when trying to send analytics data', eventQueue, {
-          'status': status,
-          'error': data
-        });
-        eventQueue = {};
-        $window.localStorage.setItem('ionic_analytics_event_queue', '{}');
-      }
-
-      // Either way remove the lock on our data
-      dispatchInProgress = false;
-      setDispatchLock(false);
     });
-
   }
 
   function enqueueEvent(collectionName, eventData) {
@@ -415,13 +487,14 @@ function($q, $timeout, $state, $ionicApp, $ionicUser, $ionicAnalytics, $interval
     eventData.keen.timestamp = new Date().toISOString();
 
     // Add the data to the queue
+    var eventQueue = persistentStorage.retrieveObject(queueKey) || {};
     if (!eventQueue[collectionName]) {
       eventQueue[collectionName] = [];
     }
     eventQueue[collectionName].push(eventData);
 
     // Write the queue to disk
-    $window.localStorage.setItem('ionic_analytics_event_queue', JSON.stringify(eventQueue));
+    persistentStorage.storeObject(queueKey, eventQueue);
   }
 
   function setDispatchInterval(value) {
