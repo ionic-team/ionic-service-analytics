@@ -12,10 +12,10 @@ IonicServiceAnalyticsModule
  * @private
  * When the app runs, add some heuristics to track for UI events.
  */
-.run(['$ionicTrack', 'scopeClean', '$timeout', function($ionicTrack, scopeClean, $timeout) {
+.run(['$ionicAnalytics', '$ionicTrack', 'scopeClean', '$timeout', function($ionicAnalytics, $ionicTrack, scopeClean, $timeout) {
   // Load events are how we track usage
   $timeout(function() {
-    $ionicTrack.send('load', {});
+    $ionicAnalytics.send('load', {});
   }, 2000);
 
   $ionicTrack.addType({
@@ -52,48 +52,299 @@ IonicServiceAnalyticsModule
 }])
 
 /**
- * @private
- * Provide base-level interface for sending events to the analytics server.
- * Use addEvent to send a single event, or addEvents to send multiple.
- * Both functions will return a promise with success and error helper functions.
+ * @ngdoc service
+ * @name $ionicTrack
+ * @module ionic.services.analytics
+ * @description
+ *
+ * A simple yet powerful analytics tracking system.
+ *
+ * The simple format is eventName, eventData. Both are arbitrary but should be
+ * the same as previous events if you wish to query on them later.
+ *
+ * @usage
+ * ```javascript
+ * $ionicTrack.track('open', {
+ *   what: 'this'
+ * });
+ *
+ * // Click tracking
+ * $ionicTrack.trackClick(x, y, {
+ *   thing: 'button'
+ * });
+ * ```
  */
 .provider('$ionicAnalytics', function() {
-  return {
-    $get: ['$ionicApp', '$http', function($ionicApp, $http) {
+  var settings = {
+    apiServer: 'https://analytics.ionic.io'
+  };
 
-      // Configure api endpoint based on app id
-      var apiEndpoint = 'https://analytics.ionic.io/'
-                      + 'api/v1/events/'
-                      + $ionicApp.getApp().app_id,
+  this.setApiServer = function(server) {
+    settings.apiServer = server;
+  };
 
-          apiKey = $ionicApp.getApiWriteKey();
+  this.$get = ['$q', '$timeout', '$state', '$ionicApp', '$ionicUser', '$interval',
+        '$http', 'domSerializer', 'persistentStorage',
+        function($q, $timeout, $state, $ionicApp, $ionicUser, $interval,
+          $http, domSerializer, persistentStorage) {
 
-      return {
+    // Configure api endpoint based on app id
+    if (!apiEndpoint)
+    var apiEndpoint = settings.apiServer
+                    + '/api/v1/events/'
+                    + $ionicApp.getApp().app_id,
+
+        apiKey = $ionicApp.getApiWriteKey();
 
 
-        addEvent: function(collectionName, eventData) {
-          var payload = {
-            collectionName: [eventData]
-          };
-          return $http.post(apiEndpoint, payload, {
-            headers: {
-              "Authorization": apiKey,
-              "Content-Type": "application/json"
-            }
+    var queueKey = 'ionic_analytics_event_queue',
+        dispatchKey = 'ionic_analytics_event_queue_dispatch';
+
+    var useEventCaching = true,
+        dispatchInterval,
+        dispatchIntervalTime;
+    setDispatchInterval(2 * 60);
+    $timeout(function() {
+      dispatchQueue();
+    });
+
+    function connectedToNetwork() {
+      // Can't access navigator stuff? Just assume connected.
+      if (typeof navigator.connection === 'undefined' ||
+          typeof navigator.connection.type === 'undefined' ||
+          typeof Connection === 'undefined') {
+        return true;
+      }
+
+      // Otherwise use the PhoneGap Connection plugin to determine the network state
+      var networkState = navigator.connection.type;
+      return networkState == Connection.ETHERNET ||
+             networkState == Connection.WIFI ||
+             networkState == Connection.CELL_2G ||
+             networkState == Connection.CELL_3G ||
+             networkState == Connection.CELL_4G ||
+             networkState == Connection.CELL;
+    }
+
+    function dispatchQueue() {
+      var eventQueue = persistentStorage.retrieveObject(queueKey) || {};
+      if (Object.keys(eventQueue).length === 0) return;
+      if (!connectedToNetwork()) return;
+
+      persistentStorage.lockedAsyncCall(dispatchKey, function() {
+
+        // Send the analytics data to the proxy server
+        return addEvents(eventQueue);
+      }).then(function(data) {
+
+        // Success from proxy server. Erase event queue.
+        persistentStorage.storeObject(queueKey, {});
+
+      }, function(err) {
+
+        if (err === 'in_progress') {
+        } else if (err === 'last_call_interrupted') {
+          persistentStorage.storeObject(queueKey, {});
+        } else {
+
+          // If we didn't connect to the server at all -> keep events
+          if (!err.status) {
+            console.log('Error sending analytics data: Failed to connect to analytics server.');
+          }
+
+          // If we connected to the server but our events were rejected -> erase events
+          else {
+            console.log('Error sending analytics data: Server responded with error', eventQueue, {
+              'status': err.status,
+              'error': err.data
+            });
+            persistentStorage.storeObject(queueKey, {});
+          }
+        }
+      });
+    }
+
+    function enqueueEvent(collectionName, eventData) {
+      console.log('enqueueing event', collectionName, eventData);
+
+      // Add timestamp property to the data
+      if (!eventData.keen) {
+        eventData.keen = {};
+      }
+      eventData.keen.timestamp = new Date().toISOString();
+
+      // Add the data to the queue
+      var eventQueue = persistentStorage.retrieveObject(queueKey) || {};
+      if (!eventQueue[collectionName]) {
+        eventQueue[collectionName] = [];
+      }
+      eventQueue[collectionName].push(eventData);
+
+      // Write the queue to disk
+      persistentStorage.storeObject(queueKey, eventQueue);
+    }
+
+    function setDispatchInterval(value) {
+      // Set how often we should send batch events to Keen, in seconds.
+      // Set this to a nonpositive number to disable event caching
+      dispatchIntervalTime = value;
+
+      // Clear the existing interval and set a new one.
+      if (dispatchInterval) {
+        $interval.cancel(dispatchInterval);
+      }
+
+      if (value > 0) {
+        dispatchInterval = $interval(function() { dispatchQueue(); }, value * 1000);
+        useEventCaching = true;
+      } else {
+        useEventCaching = false;
+      }
+    }
+
+    function getDispatchInterval() {
+      return dispatchIntervalTime;
+    }
+
+    function addEvent(collectionName, eventData) {
+      var payload = {
+        collectionName: [eventData]
+      };
+      return $http.post(apiEndpoint, payload, {
+        headers: {
+          "Authorization": apiKey,
+          "Content-Type": "application/json"
+        }
+      });
+    }
+
+    function addEvents(events) {
+      return $http.post(apiEndpoint, events, {
+        headers: {
+          "Authorization": apiKey,
+          "Content-Type": "application/json"
+        }
+      });
+    }
+
+    return {
+      setDispatchInterval: setDispatchInterval,
+      getDispatchInterval: getDispatchInterval,
+      send: function(eventName, data) {
+        // Copy objects so we can add / remove properties without affecting the original
+        var app = angular.copy($ionicApp.getApp());
+        var user = angular.copy($ionicUser.get());
+
+        // Don't expose api keys, etc if we don't have to
+        delete app.api_write_key;
+        delete app.api_read_key;
+
+        // Add user tracking data to everything sent to keen
+        data = angular.extend(data, {
+          activeState: $state.current.name,
+          _app: app
+        });
+
+        if(user) {
+          data = angular.extend(data, {
+            user: user
           });
-        },
-        addEvents: function(events) {
-          return $http.post(apiEndpoint, events, {
-            headers: {
-              "Authorization": apiKey,
-              "Content-Type": "application/json"
-            }
-          })
+        }
+
+        if (useEventCaching) {
+          enqueueEvent(eventName, data);
+        } else {
+          console.log('Immediate event dispatch', eventName, data);
+          addEvent(eventName, data);
+        }
+      },
+      track: function(eventName, data) {
+        return this.send(eventName, {
+          data: data
+        });
+      },
+
+      trackClick: function(x, y, target, data) {
+        console.log('trackClick called');
+
+        // We want to also include coordinates as a percentage relative to the target element
+        var box = target.getBoundingClientRect();
+        var width = box.right - box.left,
+            height = box.bottom - box.top;
+        var normX = (x - box.left) / width,
+            normY = (y - box.top) / height;
+
+        // Now get an xpath reference to the target element
+        var elementSerialized = domSerializer.serializeElement(target);
+
+        return this.send('tap', {
+          normCoords: {
+            x: normX,
+            y: normY
+          },
+          coords: {
+            x: x,
+            y: y
+          },
+          element: elementSerialized,
+          data: data
+        });
+      },
+
+      identify: function(userData) {
+        $ionicUser.identify(userData);
+      }
+    };
+  }];
+})
+
+
+/**
+ * @ngdoc service
+ * @name $ionicTrack
+ * @module ionic.services.analytics
+ * @description
+ *
+ * A simple yet powerful analytics tracking system.
+ *
+ * The simple format is eventName, eventData. Both are arbitrary but should be
+ * the same as previous events if you wish to query on them later.
+ *
+ * @usage
+ * ```javascript
+ * $ionicTrack.track('open', {
+ *   what: 'this'
+ * });
+ *
+ * // Click tracking
+ * $ionicTrack.trackClick(x, y, {
+ *   thing: 'button'
+ * });
+ * ```
+ */
+.factory('$ionicTrack', [function() {
+  var _types = [];
+
+  return {
+    addType: function(type) {
+      _types.push(type);
+    },
+    getTypes: function() {
+      return _types;
+    },
+    getType: function(event) {
+      var i, j, type;
+      for(i = 0, j = _types.length; i < j; i++) {
+        type = _types[i];
+        if(type.shouldHandle(event)) {
+          return type;
         }
       }
-    }]
-  }
-})
+      return null;
+    }
+  };
+}])
+
 
 .factory('domSerializer', function() {
   var getElementTreeXPath = function(element) {
@@ -372,236 +623,6 @@ function($q, $timeout, persistentStorage, $ionicApp) {
   }
 }])
 
-/**
- * @ngdoc service
- * @name $ionicTrack
- * @module ionic.services.analytics
- * @description
- *
- * A simple yet powerful analytics tracking system.
- *
- * The simple format is eventName, eventData. Both are arbitrary but should be
- * the same as previous events if you wish to query on them later.
- *
- * @usage
- * ```javascript
- * $ionicTrack.track('open', {
- *   what: 'this'
- * });
- *
- * // Click tracking
- * $ionicTrack.trackClick(x, y, {
- *   thing: 'button'
- * });
- * ```
- */
-.factory('$ionicTrack', [
-  '$q',
-  '$timeout',
-  '$state',
-  '$ionicApp',
-  '$ionicUser',
-  '$ionicAnalytics',
-  '$interval',
-  '$http',
-  'domSerializer',
-  'persistentStorage',
-function($q, $timeout, $state, $ionicApp, $ionicUser, $ionicAnalytics, $interval, $http, domSerializer, persistentStorage) {
-  var _types = [];
-
-  var queueKey = 'ionic_analytics_event_queue',
-      dispatchKey = 'ionic_analytics_event_queue_dispatch';
-
-  var useEventCaching = true,
-      dispatchInterval,
-      dispatchIntervalTime;
-  setDispatchInterval(2 * 60);
-  $timeout(function() {
-    dispatchQueue();
-  });
-
-
-  function connectedToNetwork() {
-    // Can't access navigator stuff? Just assume connected.
-    if (typeof navigator.connection === 'undefined' ||
-        typeof navigator.connection.type === 'undefined' ||
-        typeof Connection === 'undefined') {
-      return true;
-    }
-
-    // Otherwise use the PhoneGap Connection plugin to determine the network state
-    var networkState = navigator.connection.type;
-    return networkState == Connection.ETHERNET ||
-           networkState == Connection.WIFI ||
-           networkState == Connection.CELL_2G ||
-           networkState == Connection.CELL_3G ||
-           networkState == Connection.CELL_4G ||
-           networkState == Connection.CELL;
-  }
-
-  function dispatchQueue() {
-    var eventQueue = persistentStorage.retrieveObject(queueKey) || {};
-    if (Object.keys(eventQueue).length === 0) return;
-    if (!connectedToNetwork()) return;
-
-    persistentStorage.lockedAsyncCall(dispatchKey, function() {
-
-      // Send the analytics data to the proxy server
-      return $ionicAnalytics.addEvents(eventQueue);
-    }).then(function(data) {
-
-      // Success from proxy server. Erase event queue.
-      persistentStorage.storeObject(queueKey, {});
-
-    }, function(err) {
-
-      if (err === 'in_progress') {
-      } else if (err === 'last_call_interrupted') {
-        persistentStorage.storeObject(queueKey, {});
-      } else {
-
-        // If we didn't connect to the server at all -> keep events
-        if (!err.status) {
-          console.log('Error sending analytics data: Failed to connect to analytics server.');
-        }
-
-        // If we connected to the server but our events were rejected -> erase events
-        else {
-          console.log('Error sending analytics data: Server responded with error', eventQueue, {
-            'status': err.status,
-            'error': err.data
-          });
-          persistentStorage.storeObject(queueKey, {});
-        }
-      }
-    });
-  }
-
-  function enqueueEvent(collectionName, eventData) {
-    console.log('enqueueing event', collectionName, eventData);
-
-    // Add timestamp property to the data
-    if (!eventData.keen) {
-      eventData.keen = {};
-    }
-    eventData.keen.timestamp = new Date().toISOString();
-
-    // Add the data to the queue
-    var eventQueue = persistentStorage.retrieveObject(queueKey) || {};
-    if (!eventQueue[collectionName]) {
-      eventQueue[collectionName] = [];
-    }
-    eventQueue[collectionName].push(eventData);
-
-    // Write the queue to disk
-    persistentStorage.storeObject(queueKey, eventQueue);
-  }
-
-  function setDispatchInterval(value) {
-    // Set how often we should send batch events to Keen, in seconds.
-    // Set this to a nonpositive number to disable event caching
-    dispatchIntervalTime = value;
-
-    // Clear the existing interval and set a new one.
-    if (dispatchInterval) {
-      $interval.cancel(dispatchInterval);
-    }
-
-    if (value > 0) {
-      dispatchInterval = $interval(function() { dispatchQueue() }, value * 1000);
-      useEventCaching = true;
-    } else {
-      useEventCaching = false;
-    }
-  }
-
-  function getDispatchInterval() {
-    return dispatchIntervalTime;
-  }
-
-  return {
-    setDispatchInterval: setDispatchInterval,
-    getDispatchInterval: getDispatchInterval,
-    addType: function(type) {
-      _types.push(type);
-    },
-    getTypes: function() {
-      return _types;
-    },
-    getType: function(event) {
-      var i, j, type;
-      for(i = 0, j = _types.length; i < j; i++) {
-        type = _types[i];
-        if(type.shouldHandle(event)) {
-          return type;
-        }
-      }
-      return null;
-    },
-    send: function(eventName, data) {
-      // Copy objects so we can add / remove properties without affecting the original
-      var app = angular.copy($ionicApp.getApp());
-      var user = angular.copy($ionicUser.get());
-
-      // Don't expose api keys, etc if we don't have to
-      delete app.api_write_key;
-      delete app.api_read_key;
-
-      // Add user tracking data to everything sent to keen
-      data = angular.extend(data, {
-        activeState: $state.current.name,
-        _app: app
-      });
-
-      if(user) {
-        data = angular.extend(data, {
-          user: user
-        });
-      }
-
-      if (useEventCaching) {
-        enqueueEvent(eventName, data);
-      } else {
-        console.log('Immediate event dispatch', eventName, data);
-        $ionicAnalytics.addEvent(eventName, data);
-      }
-    },
-    track: function(eventName, data) {
-      return this.send(eventName, {
-        data: data
-      });
-    },
-
-    trackClick: function(x, y, target, data) {
-      // We want to also include coordinates as a percentage relative to the target element
-      var box = target.getBoundingClientRect();
-      var width = box.right - box.left,
-          height = box.bottom - box.top;
-      var normX = (x - box.left) / width,
-          normY = (y - box.top) / height;
-
-      // Now get an xpath reference to the target element
-      var elementSerialized = domSerializer.serializeElement(target);
-
-      return this.send('tap', {
-        normCoords: {
-          x: normX,
-          y: normY
-        },
-        coords: {
-          x: x,
-          y: y
-        },
-        element: elementSerialized,
-        data: data
-      });
-    },
-
-    identify: function(userData) {
-      $ionicUser.identify(userData);
-    }
-  }
-}])
 
 /**
  * @ngdoc directive
@@ -661,7 +682,7 @@ function($q, $timeout, $state, $ionicApp, $ionicUser, $ionicAnalytics, $interval
  * <body ion-track-auto></body>
  * ```
  */
-.directive('ionTrackAuto', ['$document', '$ionicTrack', 'scopeClean', function($document, $ionicTrack, scopeClean) {
+.directive('ionTrackAuto', ['$document', '$ionicAnalytics', 'scopeClean', '$ionicTrack', function($document, $ionicAnalytics, scopeClean, $ionicTrack) {
   var getType = function(e) {
     if(e.target.classList) {
       var cl = e.target.classList;
@@ -683,7 +704,7 @@ function($q, $timeout, $state, $ionicApp, $ionicUser, $ionicAnalytics, $interval
           }
         }
 
-        $ionicTrack.trackClick(event.pageX, event.pageY, event.target, {});
+        $ionicAnalytics.trackClick(event.pageX, event.pageY, event.target, {});
       });
     }
   }
@@ -698,7 +719,7 @@ function($q, $timeout, $state, $ionicApp, $ionicUser, $ionicAnalytics, $interval
  * <button ion-track-doubletap="eventName">Double Tap Track</button>
  */
 function ionTrackDirective(domEventName) {
-  return ['$ionicTrack', '$ionicGesture', 'scopeClean', function($ionicTrack, $ionicGesture, scopeClean) {
+  return ['$ionicAnalytics', '$ionicGesture', 'scopeClean', function($ionicAnalytics, $ionicGesture, scopeClean) {
 
     var gesture_driven = [
       'drag', 'dragstart', 'dragend', 'dragleft', 'dragright', 'dragup', 'dragdown',
@@ -736,9 +757,9 @@ function ionTrackDirective(domEventName) {
         function handler(e) {
           var eventData = $scope.$eval($attr.ionTrackData) || {};
           if(eventName) {
-            $ionicTrack.track(eventName, eventData);
+            $ionicAnalytics.track(eventName, eventData);
           } else {
-            $ionicTrack.trackClick(e.pageX, e.pageY, e.target, {
+            $ionicAnalytics.trackClick(e.pageX, e.pageY, e.target, {
               data: eventData
               //scope: scopeClean(angular.element(e.target).scope())
             });

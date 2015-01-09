@@ -151,9 +151,9 @@
         });
       }])
 
-      .controller('MyCtrl', function($ionicTrack, $scope) {
+      .controller('MyCtrl', function($ionicAnalytics, $scope) {
         $scope.name = 'Max';
-        $ionicTrack.identify({
+        $ionicAnalytics.identify({
           user_id: '99',
           name: 'Max Lynch',
           email: 'max@drifty.com'
