@@ -8,9 +8,7 @@ IonicServiceAnalyticsModule
  */
 .run(['$ionicAnalytics', '$ionicTrack', 'scopeClean', '$timeout', function($ionicAnalytics, $ionicTrack, scopeClean, $timeout) {
   // Load events are how we track usage
-  $timeout(function() {
-    $ionicAnalytics.send('load', {});
-  }, 2000);
+  $ionicAnalytics.send('load', {});
 
   $ionicTrack.addType({
     name: 'button',
@@ -58,13 +56,13 @@ IonicServiceAnalyticsModule
  *
  * @usage
  * ```javascript
- * $ionicTrack.track('open', {
- *   what: 'this'
+ * $ionicAnalytics.send('like', {
+ *   subject: 'dogs'
  * });
  *
  * // Click tracking
- * $ionicTrack.trackClick(x, y, {
- *   thing: 'button'
+ * $ionicAnalytics.trackClick(x, y, button, {
+ *   name: 'home'
  * });
  * ```
  */
@@ -89,7 +87,6 @@ IonicServiceAnalyticsModule
                     + $ionicApp.getApp().app_id,
 
         apiKey = $ionicApp.getApiWriteKey();
-
 
     var queueKey = 'ionic_analytics_event_queue',
         dispatchKey = 'ionic_analytics_event_queue_dispatch';
@@ -225,23 +222,34 @@ IonicServiceAnalyticsModule
       setDispatchInterval: setDispatchInterval,
       getDispatchInterval: getDispatchInterval,
       send: function(eventName, data) {
-        // Copy objects so we can add / remove properties without affecting the original
-        var app = angular.copy($ionicApp.getApp());
-        var user = angular.copy($ionicUser.get());
+        // Copy objects so they can sit in the queue without being modified
+        var app = angular.copy($ionicApp.getApp()),
+            user = angular.copy($ionicUser.get());
 
-        // Don't expose api keys, etc if we don't have to
+        if (!app.app_id) {
+          var msg = 'You must provide an app_id to identify your app before sending analytics data.\n    ' +
+                    'See http://docs.ionic.io/services/getting-started/'
+          throw new Error(msg)
+        }
+        if (!apiKey) {
+          var msg = 'You must specify an api key before sending analytics data.\n    ' +
+                    'See http://docs.ionic.io/services/getting-started/'
+          throw new Error(msg)
+        }
+
+        // Don't expose api keys
         delete app.api_write_key;
         delete app.api_read_key;
 
         // Add user tracking data to everything sent to keen
         data = angular.extend(data, {
-          activeState: $state.current.name,
+          _activeState: $state.current.name,
           _app: app
         });
 
         if(user) {
           data = angular.extend(data, {
-            user: user
+            _user: user
           });
         }
 
@@ -252,12 +260,6 @@ IonicServiceAnalyticsModule
           addEvent(eventName, data);
         }
       },
-      track: function(eventName, data) {
-        return this.send(eventName, {
-          data: data
-        });
-      },
-
       trackClick: function(x, y, target, data) {
         console.log('trackClick called');
 
