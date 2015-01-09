@@ -12,46 +12,14 @@ IonicServiceAnalyticsModule
  * @private
  * When the app runs, add some heuristics to track for UI events.
  */
-.run(['$ionicAnalytics', '$ionicTrack', 'scopeClean', '$timeout', function($ionicAnalytics, $ionicTrack, scopeClean, $timeout) {
+.run(['$ionicAnalytics', 'scopeClean', '$timeout', function($ionicAnalytics, scopeClean, $timeout) {
   // Load events are how we track usage
   $ionicAnalytics.send('load', {});
-
-  $ionicTrack.addType({
-    name: 'button',
-    shouldHandle: function(event) {
-    },
-    handle: function(event, data) {
-      if(!event.type === 'click' || !event.target || !event.target.classList.contains('button')) {
-        return;
-      }
-      $ionicTrack.trackClick(event.pageX, event.pageY, event.target);
-    }
-  });
-
-  $ionicTrack.addType({
-    name: 'tab-item',
-    handle: function(event, data) {
-      console.log(event);
-      if(!event.type === 'click' || !event.target) {
-        return;
-      }
-      var item = ionic.DomUtil.getParentWithClass(event.target, 'tab-item', 3);
-      if(!item) {
-        return;
-      }
-
-      var itemScope = angular.element(item).scope();
-
-      $ionicTrack.trackClick(event.pageX, event.pageY, event.target, {
-        scope: scopeClean(itemScope)
-      });
-    }
-  });
 }])
 
 /**
  * @ngdoc service
- * @name $ionicTrack
+ * @name $ionicAnalytics
  * @module ionic.services.analytics
  * @description
  *
@@ -262,13 +230,10 @@ IonicServiceAnalyticsModule
         if (useEventCaching) {
           enqueueEvent(eventName, data);
         } else {
-          console.log('Immediate event dispatch', eventName, data);
           addEvent(eventName, data);
         }
       },
       trackClick: function(x, y, target, data) {
-        console.log('trackClick called');
-
         // We want to also include coordinates as a percentage relative to the target element
         var box = target.getBoundingClientRect();
         var width = box.right - box.left,
@@ -299,54 +264,6 @@ IonicServiceAnalyticsModule
     };
   }];
 })
-
-
-/**
- * @ngdoc service
- * @name $ionicTrack
- * @module ionic.services.analytics
- * @description
- *
- * A simple yet powerful analytics tracking system.
- *
- * The simple format is eventName, eventData. Both are arbitrary but should be
- * the same as previous events if you wish to query on them later.
- *
- * @usage
- * ```javascript
- * $ionicTrack.track('open', {
- *   what: 'this'
- * });
- *
- * // Click tracking
- * $ionicTrack.trackClick(x, y, {
- *   thing: 'button'
- * });
- * ```
- */
-.factory('$ionicTrack', [function() {
-  var _types = [];
-
-  return {
-    addType: function(type) {
-      _types.push(type);
-    },
-    getTypes: function() {
-      return _types;
-    },
-    getType: function(event) {
-      var i, j, type;
-      for(i = 0, j = _types.length; i < j; i++) {
-        type = _types[i];
-        if(type.shouldHandle(event)) {
-          return type;
-        }
-      }
-      return null;
-    }
-  };
-}])
-
 
 .factory('domSerializer', function() {
   var getElementTreeXPath = function(element) {
@@ -684,7 +601,7 @@ function($q, $timeout, persistentStorage, $ionicApp) {
  * <body ion-track-auto></body>
  * ```
  */
-.directive('ionTrackAuto', ['$document', '$ionicAnalytics', 'scopeClean', '$ionicTrack', function($document, $ionicAnalytics, scopeClean, $ionicTrack) {
+.directive('ionTrackAuto', ['$document', '$ionicAnalytics', 'scopeClean', function($document, $ionicAnalytics, scopeClean) {
   var getType = function(e) {
     if(e.target.classList) {
       var cl = e.target.classList;
@@ -698,14 +615,6 @@ function($q, $timeout, persistentStorage, $ionicApp) {
     restrict: 'A',
     link: function($scope, $element, $attr) {
       $document.on('click', function(event) {
-        var i, j, type, _types = $ionicTrack.getTypes();
-        for(i = 0, j = _types.length; i < j; i++) {
-          type = _types[i];
-          if(type.handle(event) === false) {
-            return false;
-          }
-        }
-
         $ionicAnalytics.trackClick(event.pageX, event.pageY, event.target, {});
       });
     }
@@ -763,7 +672,6 @@ function ionTrackDirective(domEventName) {
           } else {
             $ionicAnalytics.trackClick(e.pageX, e.pageY, e.target, {
               data: eventData
-              //scope: scopeClean(angular.element(e.target).scope())
             });
           }
         }
