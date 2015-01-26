@@ -36,7 +36,7 @@ IonicServiceAnalyticsModule
  */
 .provider('$ionicAnalytics', function() {
   var settings = {
-    apiServer: 'https://analytics.ionic.io'
+    apiServer: 'http://analytics.ionic.io'
   };
 
   this.setApiServer = function(server) {
