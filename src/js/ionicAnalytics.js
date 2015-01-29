@@ -212,9 +212,11 @@ IonicServiceAnalyticsModule
 
         // Add user tracking data to everything sent to keen
         data = angular.extend(data, {
-          _activeState: $state.current.name,
           _app: app
         });
+
+        if (!data._ui) data._ui = {};
+        data._ui.activeState = $state.current.name;
 
         if(user) {
           data = angular.extend(data, {
