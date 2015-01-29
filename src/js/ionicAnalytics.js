@@ -11,6 +11,7 @@ IonicServiceAnalyticsModule
   $ionicAnalytics.send('load', {});
 }])
 
+
 /**
  * @ngdoc service
  * @name $ionicAnalytics
@@ -50,14 +51,14 @@ IonicServiceAnalyticsModule
 
     // Configure api endpoint based on app id
     if (!apiEndpoint)
-    var apiEndpoint = settings.apiServer
+    var appId = $ionicApp.getApp().app_id,
+        apiEndpoint = settings.apiServer
                     + '/api/v1/events/'
-                    + $ionicApp.getApp().app_id,
-
+                    + appId,
         apiKey = $ionicApp.getApiWriteKey();
 
-    var queueKey = 'ionic_analytics_event_queue',
-        dispatchKey = 'ionic_analytics_event_queue_dispatch';
+    var queueKey = 'ionic_analytics_event_queue_' + appId,
+        dispatchKey = 'ionic_analytics_event_queue_dispatch_' + appId;
 
     var useEventCaching = true,
         dispatchInterval,
@@ -227,37 +228,13 @@ IonicServiceAnalyticsModule
           addEvent(eventName, data);
         }
       },
-      trackClick: function(x, y, target, data) {
-        // We want to also include coordinates as a percentage relative to the target element
-        var box = target.getBoundingClientRect();
-        var width = box.right - box.left,
-            height = box.bottom - box.top;
-        var normX = (x - box.left) / width,
-            normY = (y - box.top) / height;
-
-        // Now get an xpath reference to the target element
-        var elementSerialized = domSerializer.serializeElement(target);
-
-        return this.send('tap', {
-          normCoords: {
-            x: normX,
-            y: normY
-          },
-          coords: {
-            x: x,
-            y: y
-          },
-          element: elementSerialized,
-          data: data
-        });
-      },
-
       identify: function(userData) {
         $ionicUser.identify(userData);
       }
     };
   }];
 })
+
 
 .factory('domSerializer', function() {
   var getElementTreeXPath = function(element) {
@@ -495,22 +472,12 @@ IonicServiceAnalyticsModule
   '$ionicApp',
 function($q, $timeout, persistentStorage, $ionicApp) {
   // User object we'll use to store all our user info
-  var storageKeyName = 'ionic_analytics_user_' + $ionicApp.getApp().app_id;
-  var user = persistentStorage.retrieveObject(storageKeyName) || {};
+  var storageKeyName = 'ionic_analytics_user_' + $ionicApp.getApp().app_id,
+      user = persistentStorage.retrieveObject(storageKeyName) || {};
 
-  // Generate a device and user ids if we don't have them already
-  var isUserDirty = false;
-  if (!user.user_id) {
-    user.user_id = generateGuid();
-    isUserDirty = true;
-  }
-  if (!user.device_id) {
-    user.device_id = generateGuid();
-    isUserDirty = true;
-  }
-
-  // Write to local storage if we changed anything on our user object
-  if (isUserDirty) {
+  // Generate a new user id if this is our first session
+  if (!user._id) {
+    user._id = generateGuid();
     persistentStorage.storeObject(storageKeyName, user);
   }
 
@@ -524,6 +491,11 @@ function($q, $timeout, persistentStorage, $ionicApp) {
 
   return {
     identify: function(userData) {
+      if (userData._id) {
+        var msg = 'You cannot override the _id property on users.';
+        throw new Error(msg)
+      }
+
       // Copy all the data into our user object
       angular.extend(user, userData);
 
@@ -534,6 +506,104 @@ function($q, $timeout, persistentStorage, $ionicApp) {
       return user;
     }
   }
+}])
+
+
+/**
+ * @ngdoc service
+ * @name $ionicAutoTrack
+ * @module ionic.services.analytics
+ * @description
+ *
+ * Utility for auto tracking events. Every DOM event will go through a
+ * list of hooks which extract meaningful data and add it to an event to Keen.
+ *
+ * Hooks should take a DOM event and return a dictionary of extracted properties, if any.
+ *
+ * @usage
+ * ```javascript
+ * $ionicAutoTrack.addHook(function(event) {
+ *   return {
+ *     x: event.pageX
+ *   };
+ * });
+ * ```
+ */
+.factory('$ionicAutoTrack', ['domSerializer', function(domSerializer) {
+
+  // Array of handlers that events will filter through.
+  var hooks = [];
+
+  // Add a few handlers to start off our hooks
+  // Handler for general click events
+  hooks.push(function(event) {
+
+    if (event.type !== 'click') return;
+
+    // We want to also include coordinates as a percentage relative to the target element
+    var x = event.pageX,
+        y = event.pageY,
+        box = event.target.getBoundingClientRect(),
+        width = box.right - box.left,
+        height = box.bottom - box.top,
+        normX = (x - box.left) / width,
+        normY = (y - box.top) / height;
+
+    // Now get an xpath reference to the target element
+    var elementSerialized = domSerializer.serializeElement(event.target);
+
+    var tapData = {
+      coords: {
+        x: x,
+        y: y
+      },
+      element: elementSerialized
+    };
+
+    if (isFinite(normX) && isFinite(normY)) {
+      tapData.normCoords = {
+        x: normX,
+        y: normY
+      };
+    }
+
+    return tapData;
+  });
+
+  // TODO fix handler for tab-item clicks
+  // hooks.push(function(event) {
+  //   if (event.type !== 'click') return;
+
+  //   var item = ionic.DomUtil.getParentWithClass(event.target, 'tab-item', 3);
+  //   if(!item) {
+  //     return;
+  //   }
+  // });
+
+  return {
+    addHook: function(hook) {
+      hooks.push(hook);
+    },
+
+    runHooks: function(domEvent) {
+
+      // Event we'll actually send for analytics
+      var trackingEvent;
+
+      // Run the event through each hook
+      for (var i = 0; i < hooks.length; i++) {
+        var hookResponse = hooks[i](domEvent);
+        if (hookResponse) {
+
+          // Append the hook response to our tracking data
+          if (!trackingEvent) trackingEvent = {};
+          trackingEvent = angular.extend(trackingEvent, hookResponse);
+        }
+      }
+
+      return trackingEvent;
+    }
+  };
 }])
 
 
@@ -595,21 +665,21 @@ function($q, $timeout, persistentStorage, $ionicApp) {
  * <body ion-track-auto></body>
  * ```
  */
-.directive('ionTrackAuto', ['$document', '$ionicAnalytics', 'scopeClean', function($document, $ionicAnalytics, scopeClean) {
-  var getType = function(e) {
-    if(e.target.classList) {
-      var cl = e.target.classList;
-      if(cl.contains('button')) {
-        return ButtonType;
-      }
-    }
-    return null;
-  };
+.directive('ionTrackAuto', ['$document', '$ionicAnalytics', '$ionicAutoTrack', function($document, $ionicAnalytics, $ionicAutoTrack) {
   return {
     restrict: 'A',
     link: function($scope, $element, $attr) {
+
+      // Listen for events on the document body.
+      // In the future we can listen for all kinds of events.
       $document.on('click', function(event) {
-        $ionicAnalytics.trackClick(event.pageX, event.pageY, event.target, {});
+        var uiData = $ionicAutoTrack.runHooks(event);
+        if (uiData) {
+          var trackingEvent = {
+            _ui: uiData
+          }
+          $ionicAnalytics.send('tap', trackingEvent);
+        }
       });
     }
   }
