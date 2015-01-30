@@ -464,11 +464,27 @@ IonicServiceAnalyticsModule
 function($q, $timeout, persistentStorage, $ionicApp) {
   // User object we'll use to store all our user info
   var storageKeyName = 'ionic_analytics_user_' + $ionicApp.getApp().app_id,
-      user = persistentStorage.retrieveObject(storageKeyName) || {};
+      user = persistentStorage.retrieveObject(storageKeyName) || {},
+      deviceCordova = ionic.Platform.device(),
+      device = {
+        screen_width: window.innerWidth * (window.devicePixelRatio || 1),
+        screen_height: window.innerHeight * (window.devicePixelRatio || 1)
+      };
 
-  // Generate a new user id if this is our first session
+  if (deviceCordova.model) device.model = deviceCordova.model;
+  if (deviceCordova.platform) device.platform = deviceCordova.platform;
+  if (deviceCordova.version) device.version = deviceCordova.version;
+
+  // Flag if we've changed anything on our user
+  var dirty = false;
+  dirty = storeOrDirty('is_on_device', ionic.Platform.isWebView());
+  dirty = storeOrDirty('device', device);
   if (!user._id) {
     user._id = generateGuid();
+    dirty = true;
+  }
+
+  if (dirty) {
     persistentStorage.storeObject(storageKeyName, user);
   }
 
@@ -478,6 +494,15 @@ function($q, $timeout, persistentStorage, $ionicApp) {
         var r = Math.random()*16|0, v = c == 'x' ? r : (r&0x3|0x8);
         return v.toString(16);
     });
+  }
+
+  function storeOrDirty(key, value) {
+    // Store the key on the user object and return whether something changed
+    if (!angular.equals(user[key], value)) {
+      user[key] = value;
+      return true;
+    }
+    return false;
   }
 
   return {
