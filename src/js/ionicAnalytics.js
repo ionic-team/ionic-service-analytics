@@ -1,4 +1,4 @@
-var IonicServiceAnalyticsModule = angular.module('ionic.services.analytics', ['ionic.services.core']);
+var IonicServiceAnalyticsModule = angular.module('ionic.service.analytics', ['ionic.service.core']);
 
 IonicServiceAnalyticsModule
 
@@ -437,7 +437,7 @@ IonicServiceAnalyticsModule
 /**
  * @ngdoc service
  * @name $ionicUser
- * @module ionic.services.analytics
+ * @module ionic.service.analytics
  * @description
  *
  * An interface for storing data to a user object which will be sent with all analytics tracking.
@@ -528,7 +528,7 @@ function($q, $timeout, persistentStorage, $ionicApp) {
 /**
  * @ngdoc service
  * @name $ionicAutoTrack
- * @module ionic.services.analytics
+ * @module ionic.service.analytics
  * @description
  *
  * Utility for auto tracking events. Every DOM event will go through a
@@ -626,7 +626,7 @@ function($q, $timeout, persistentStorage, $ionicApp) {
 /**
  * @ngdoc directive
  * @name ionTrackClick
- * @module ionic.services.analytics
+ * @module ionic.service.analytics
  * @restrict A
  * @parent ionic.directive:ionTrackClick
  *
@@ -665,7 +665,7 @@ function($q, $timeout, persistentStorage, $ionicApp) {
 /**
  * @ngdoc directive
  * @name ionTrackAuto
- * @module ionic.services.analytics
+ * @module ionic.service.analytics
  * @restrict A
  * @parent ionic.directive:ionTrackAuto
  *
