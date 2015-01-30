@@ -69,7 +69,7 @@ IonicServiceAnalyticsModule
     var useEventCaching = true,
         dispatchInterval,
         dispatchIntervalTime;
-    setDispatchInterval(2 * 60);
+    setDispatchInterval(30);
     $timeout(function() {
       dispatchQueue();
     });
