@@ -12,9 +12,9 @@ IonicServiceAnalyticsModule
  * @private
  * When the app runs, add some heuristics to track for UI events.
  */
-.run(['$ionicAnalytics', 'scopeClean', '$timeout', function($ionicAnalytics, scopeClean, $timeout) {
+.run(['$ionicAnalytics', function($ionicAnalytics) {
   // Load events are how we track usage
-  $ionicAnalytics.send('load', {});
+  $ionicAnalytics.track('load', {});
 }])
 
 
@@ -26,18 +26,19 @@ IonicServiceAnalyticsModule
  *
  * A simple yet powerful analytics tracking system.
  *
- * The simple format is eventName, eventData. Both are arbitrary but should be
- * the same as previous events if you wish to query on them later.
+ * The simple format is eventName, eventData. Both are arbitrary but the eventName
+ * should be the same as previous events if you wish to query on them later.
  *
  * @usage
  * ```javascript
- * $ionicAnalytics.send('like', {
- *   subject: 'dogs'
+ * $ionicAnalytics.track('order', {
+ *   price: 39.99,
+ *   item: 'Time Machine',
  * });
  *
- * // Click tracking
- * $ionicAnalytics.trackClick(x, y, button, {
- *   name: 'home'
+ * $ionicAnalytics.identify('favorite_things', {
+ *   fruit: 'pear',
+ *   animal: 'lion'
  * });
  * ```
  */
@@ -96,6 +97,8 @@ IonicServiceAnalyticsModule
       var eventQueue = persistentStorage.retrieveObject(queueKey) || {};
       if (Object.keys(eventQueue).length === 0) return;
       if (!connectedToNetwork()) return;
+
+      console.log('dispatching queue', eventQueue);
 
       persistentStorage.lockedAsyncCall(dispatchKey, function() {
 
@@ -196,13 +199,13 @@ IonicServiceAnalyticsModule
     return {
       setDispatchInterval: setDispatchInterval,
       getDispatchInterval: getDispatchInterval,
-      send: function(eventName, data) {
+      track: function(eventName, data) {
         // Copy objects so they can sit in the queue without being modified
         var app = angular.copy($ionicApp.getApp()),
             user = angular.copy($ionicUser.get());
 
         if (!app.app_id) {
-          var msg = 'You must provide an app_id to identify your app before sending analytics data.\n    ' +
+          var msg = 'You must provide an app_id to identify your app before tracking analytics data.\n    ' +
                     'See http://docs.ionic.io/services/getting-started/'
           throw new Error(msg)
         }
@@ -280,44 +283,6 @@ IonicServiceAnalyticsModule
   }
 })
 
-
-/**
- * @private
- * Clean a given scope (for sending scope data to the server for analytics purposes.
- * This removes things we don't care about and tries to just expose
- * useful scope data.
- */
-.factory('scopeClean', function() {
-  var clean = function(scope) {
-    // Make a container object to store all our cloned properties
-    var cleaned = angular.isArray(scope) ? [] : {};
-
-    for (var key in scope) {
-      // Check that the property isn't inherited
-      if (!scope.hasOwnProperty(key))
-        continue;
-
-      var val = scope[key];
-
-      // Filter out bad property names / values
-      if (key === 'constructor' || key === 'this' ||
-          typeof val === 'function' ||
-          key.indexOf('$') != -1 ) {
-        continue;
-      }
-
-      // Recurse if we're looking at an object or array
-      if (typeof val === 'object') {
-        cleaned[key] = clean(val);
-      } else {
-        // Otherwise just pop it onto the cleaned object
-        cleaned[key] = val;
-      }
-    }
-    return cleaned;
-  }
-  return clean;
-})
 
 /**
  * @private
@@ -545,8 +510,10 @@ function($q, $timeout, persistentStorage, $ionicApp) {
  * @usage
  * ```javascript
  * $ionicAutoTrack.addHook(function(event) {
+ *   if (event.type !== 'click') return;
+ *
  *   return {
- *     x: event.pageX
+ *     my_extra_tracking_data: event.pageX
  *   };
  * });
  * ```
@@ -700,7 +667,7 @@ function($q, $timeout, persistentStorage, $ionicApp) {
           var trackingEvent = {
             _ui: uiData
           }
-          $ionicAnalytics.send('tap', trackingEvent);
+          $ionicAnalytics.track('tap', trackingEvent);
         }
       });
     }
@@ -716,7 +683,7 @@ function($q, $timeout, persistentStorage, $ionicApp) {
  * <button ion-track-doubletap="eventName">Double Tap Track</button>
  */
 function ionTrackDirective(domEventName) {
-  return ['$ionicAnalytics', '$ionicGesture', 'scopeClean', function($ionicAnalytics, $ionicGesture, scopeClean) {
+  return ['$ionicAnalytics', '$ionicGesture', function($ionicAnalytics, $ionicGesture) {
 
     var gesture_driven = [
       'drag', 'dragstart', 'dragend', 'dragleft', 'dragright', 'dragup', 'dragdown',
