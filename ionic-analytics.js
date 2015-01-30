@@ -217,18 +217,11 @@ IonicServiceAnalyticsModule
         delete app.api_read_key;
 
         // Add user tracking data to everything sent to keen
-        data = angular.extend(data, {
-          _app: app
-        });
+        data._app = app;
+        data._user = user;
 
         if (!data._ui) data._ui = {};
         data._ui.activeState = $state.current.name;
-
-        if(user) {
-          data = angular.extend(data, {
-            _user: user
-          });
-        }
 
         if (useEventCaching) {
           enqueueEvent(eventName, data);
@@ -456,8 +449,7 @@ IonicServiceAnalyticsModule
  * An interface for storing data to a user object which will be sent with all analytics tracking.
  *
  * Add tracking data to the user by passing objects in to the identify function.
- * Identify a user with a user_id (from, e.g., logging in) to track a single user's
- * activity over multiple devices.
+ * The _id property identifies the user on this device and cannot be overwritten.
  *
  * @usage
  * ```javascript
@@ -468,9 +460,6 @@ IonicServiceAnalyticsModule
  *   username: "Timmy"
  * });
  *
- * $ionicUser.identify({
- *   user_id: 123
- * });
  * ```
  */
 .factory('$ionicUser', [
