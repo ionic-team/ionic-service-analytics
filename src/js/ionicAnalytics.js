@@ -226,9 +226,6 @@ IonicServiceAnalyticsModule
           addEvent(eventName, data);
         }
       },
-      identify: function(userData) {
-        $ionicUser.identify(userData);
-      }
     };
   }];
 })
