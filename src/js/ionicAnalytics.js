@@ -56,10 +56,11 @@ IonicServiceAnalyticsModule
         apiEndpoint = settings.apiServer
                     + '/api/v1/events/'
                     + appId,
-        apiKey = $ionicApp.getApiWriteKey();
+        apiKey = $ionicApp.getApiKey();
 
     var queueKey = 'ionic_analytics_event_queue_' + appId,
-        dispatchKey = 'ionic_analytics_event_queue_dispatch_' + appId;
+        dispatchKey = 'ionic_analytics_event_queue_dispatch_' + appId,
+        apiWriteKeyKey = 'ionic_analytics_write_key_key_' + appId;
 
     var useEventCaching = true,
         dispatchInterval,
@@ -85,6 +86,37 @@ IonicServiceAnalyticsModule
              networkState == Connection.CELL_3G ||
              networkState == Connection.CELL_4G ||
              networkState == Connection.CELL;
+    }
+
+    // Returns a promise which resolves to the analytics key
+    function requestApiWriteKey() {
+
+      // Return the cached key if we have one.
+      var deferred = $q.defer();
+      var cachedKey = persistentStorage.retrieveObject(apiWriteKeyKey);
+      if (cachedKey) {
+        deferred.resolve(cachedKey);
+        return deferred.promise;
+      }
+
+      // Request the write key for this app.
+      var req = {
+        method: 'GET',
+        url: $ionicApp.getApiUrl() + '/api/v1/app/' + appId + '/keys/write',
+        headers: {
+          'Authorization': "basic " + btoa(appId + ':' + apiKey)
+        }
+      };
+      $http(req).then(function(resp){
+        writeKey = resp.data.write_key;
+        persistentStorage.storeObject(apiWriteKeyKey, writeKey);
+        deferred.resolve(writeKey);
+
+      }, function(err){
+        console.log('Error grabbing write key, continuing without.');
+      });
+
+      return deferred.promise;
     }
 
     function dispatchQueue() {
@@ -173,20 +205,26 @@ IonicServiceAnalyticsModule
       var payload = {
         collectionName: [eventData]
       };
-      return $http.post(apiEndpoint, payload, {
-        headers: {
-          "Authorization": apiKey,
-          "Content-Type": "application/json"
-        }
+
+      return requestApiWriteKey().then(function(apiWriteKey) {
+        return $http.post(apiEndpoint, payload, {
+          headers: {
+            "Authorization": apiWriteKey,
+            "Content-Type": "application/json"
+          }
+        });
       });
     }
 
     function addEvents(events) {
-      return $http.post(apiEndpoint, events, {
-        headers: {
-          "Authorization": apiKey,
-          "Content-Type": "application/json"
-        }
+      return requestApiWriteKey().then(function(apiWriteKey) {
+
+        return $http.post(apiEndpoint, events, {
+          headers: {
+            "Authorization": apiWriteKey,
+            "Content-Type": "application/json"
+          }
+        });
       });
     }
 
@@ -200,12 +238,12 @@ IonicServiceAnalyticsModule
 
         if (!app.app_id) {
           var msg = 'You must provide an app_id to identify your app before tracking analytics data.\n    ' +
-                    'See http://docs.ionic.io/services/getting-started/'
+                    'See http://docs.ionic.io/v1.0/docs/io-quick-start'
           throw new Error(msg)
         }
         if (!apiKey) {
           var msg = 'You must specify an api key before sending analytics data.\n    ' +
-                    'See http://docs.ionic.io/services/getting-started/'
+                    'See http://docs.ionic.io/v1.0/docs/io-quick-start'
           throw new Error(msg)
         }
 
