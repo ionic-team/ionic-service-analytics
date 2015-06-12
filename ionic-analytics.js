@@ -4,9 +4,7 @@
  * See LICENSE in this repository for license information
  */
 (function(){
-var IonicServiceAnalyticsModule = angular.module('ionic.service.analytics', ['ionic.service.core']);
-
-IonicServiceAnalyticsModule
+angular.module('ionic.service.analytics', ['ionic.service.core'])
 
 /**
  * @private
@@ -239,7 +237,7 @@ IonicServiceAnalyticsModule
       getDispatchInterval: getDispatchInterval,
       track: function(eventName, data) {
         // Copy objects so they can sit in the queue without being modified
-        var app = angular.copy($ionicApp.getApp()),
+        var app = $ionicApp.getApp(),
             user = angular.copy($ionicUser.get());
 
         if (!app.app_id) {
@@ -319,6 +317,8 @@ IonicServiceAnalyticsModule
 })
 
 
+angular.module('ionic.service.analytics')
+
 /**
  * @ngdoc service
  * @name $ionicAutoTrack
@@ -373,10 +373,8 @@ IonicServiceAnalyticsModule
     };
 
     if (isFinite(normX) && isFinite(normY)) {
-      tapData.normCoords = {
-        x: normX,
-        y: normY
-      };
+      tapData.coords.x_norm = normX;
+      tapData.coords.y_norm = normY;
     }
 
     return tapData;
