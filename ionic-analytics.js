@@ -7,16 +7,6 @@
 angular.module('ionic.service.analytics', ['ionic.service.core'])
 
 /**
- * @private
- * When the app runs, add some heuristics to track for UI events.
- */
-.run(['$ionicAnalytics', function($ionicAnalytics) {
-  // Load events are how we track usage
-  $ionicAnalytics.track('load', {});
-}])
-
-
-/**
  * @ngdoc service
  * @name $ionicAnalytics
  * @module ionic.services.analytics
@@ -31,48 +21,113 @@ angular.module('ionic.service.analytics', ['ionic.service.core'])
  * ```javascript
  * $ionicAnalytics.track('order', {
  *   price: 39.99,
- *   item: 'Time Machine',
+ *   item: 'Time Machine'
  * });
  *
- * $ionicAnalytics.identify('favorite_things', {
- *   fruit: 'pear',
- *   animal: 'lion'
- * });
- * ```
  */
 .provider('$ionicAnalytics', function() {
-  var settings = {
-    apiServer: 'https://analytics.ionic.io'
-  };
 
-  this.setApiServer = function(server) {
-    settings.apiServer = server;
-  };
+  this.$get = [
+    '$q', 
+    '$timeout', 
+    '$state', 
+    '$ionicApp', 
+    '$ionicUser', 
+    '$interval',
+    '$http', 
+    'domSerializer', 
+    'persistentStorage',
+  function($q, $timeout, $state, $ionicApp, $ionicUser, $interval, $http, domSerializer, persistentStorage) {
 
-  this.$get = ['$q', '$timeout', '$state', '$ionicApp', '$ionicUser', '$interval',
-        '$http', 'domSerializer', 'persistentStorage',
-        function($q, $timeout, $state, $ionicApp, $ionicUser, $interval,
-          $http, domSerializer, persistentStorage) {
+    var api = {
+      getAppId: function() {
+        return $ionicApp.getApp().app_id;
+      },
+      getApiKey: function() {
+        return $ionicApp.getApiKey();
+      },
+      getApiServer: function() {
+        return $ionicApp.getValue('analytics_api_server');
+      },
+      getAnalyticsKey: function() {
+        return this.analyticsKey;
+      },
+      setAnalyticsKey: function(v) {
+        this.analyticsKey = v;
+      },
+      hasAnalyticsKey: function() {
+        return !!this.analyticsKey;
+      },
+      requestAnalyticsKey: function() {
 
-    // Configure api endpoint based on app id
-    if (!apiEndpoint)
-    var appId = $ionicApp.getApp().app_id,
-        apiEndpoint = settings.apiServer
-                    + '/api/v1/events/'
-                    + appId,
-        apiKey = $ionicApp.getApiKey();
+        var req = {
+          method: 'GET',
+          url: $ionicApp.getApiUrl() + '/api/v1/app/' + this.getAppId() + '/keys/write',
+          headers: {
+            'Authorization': "basic " + btoa(this.getAppId() + ':' + this.getApiKey())
+          }
+        };
+        return $http(req);
+      },
+      postEvent: function(name, data) {
+        var payload = {
+          name: [data]
+        };
 
-    var queueKey = 'ionic_analytics_event_queue_' + appId,
-        dispatchKey = 'ionic_analytics_event_queue_dispatch_' + appId,
-        apiWriteKeyKey = 'ionic_analytics_write_key_key_' + appId;
+        var analyticsKey = this.getAnalyticsKey();
+        if (!analyticsKey) {
+          throw Error('Cannot send events to the analytics server without an Analytics key.')
+        }
+
+        var req = {
+          method: 'POST',
+          url: this.getApiServer() + '/api/v1/events/' + this.getAppId(),
+          data: payload,
+          headers: {
+            "Authorization": analyticsKey,
+            "Content-Type": "application/json"
+          }
+        }
+
+        return $http(req);
+      },
+      postEvents: function(events) {
+        var analyticsKey = this.getAnalyticsKey();
+        if (!analyticsKey) {
+          throw Error('Cannot send events to the analytics server without an Analytics key.')
+        }
+
+        var req = {
+          method: 'POST',
+          url: this.getApiServer() + '/api/v1/events/' + this.getAppId(),
+          data: events,
+          headers: {
+            "Authorization": analyticsKey,
+            "Content-Type": "application/json"
+          }
+        }
+
+        return $http(req);
+      }
+    }
+
+    var cache = {
+      get: function(key) {
+        key = this.scopeKey(key);
+        return persistentStorage.retrieveObject(key);
+      },
+      set: function(key, value) {
+        key = this.scopeKey(key);
+        return persistentStorage.storeObject(key, value);
+      },
+      scopeKey: function(key) {
+        return 'ionic_analytics_' + key + '_' + api.getAppId();
+      }
+    };
 
     var useEventCaching = true,
         dispatchInterval,
         dispatchIntervalTime;
-    setDispatchInterval(30);
-    $timeout(function() {
-      dispatchQueue();
-    });
 
     function connectedToNetwork() {
       // Can't access navigator stuff? Just assume connected.
@@ -92,79 +147,50 @@ angular.module('ionic.service.analytics', ['ionic.service.core'])
              networkState == Connection.CELL;
     }
 
-    // Returns a promise which resolves to the analytics key
-    function requestApiWriteKey() {
-
-      // Return the cached key if we have one.
-      var deferred = $q.defer();
-      var cachedKey = persistentStorage.retrieveObject(apiWriteKeyKey);
-      if (cachedKey) {
-        deferred.resolve(cachedKey);
-        return deferred.promise;
-      }
-
-      // Request the write key for this app.
-      var req = {
-        method: 'GET',
-        url: $ionicApp.getApiUrl() + '/api/v1/app/' + appId + '/keys/write',
-        headers: {
-          'Authorization': "basic " + btoa(appId + ':' + apiKey)
-        }
-      };
-      $http(req).then(function(resp){
-        writeKey = resp.data.write_key;
-        persistentStorage.storeObject(apiWriteKeyKey, writeKey);
-        deferred.resolve(writeKey);
-
-      }, function(err){
-        console.log('Error grabbing write key, continuing without.');
-      });
-
-      return deferred.promise;
-    }
-
     function dispatchQueue() {
-      var eventQueue = persistentStorage.retrieveObject(queueKey) || {};
+      var eventQueue = cache.get('event_queue') || {};
+
       if (Object.keys(eventQueue).length === 0) return;
       if (!connectedToNetwork()) return;
 
-      console.log('dispatching queue', eventQueue);
 
-      persistentStorage.lockedAsyncCall(dispatchKey, function() {
+
+      persistentStorage.lockedAsyncCall(cache.scopeKey('event_dispatch'), function() {
 
         // Send the analytics data to the proxy server
-        return addEvents(eventQueue);
+        return api.postEvents(eventQueue);
       }).then(function(data) {
 
         // Success from proxy server. Erase event queue.
-        persistentStorage.storeObject(queueKey, {});
+        console.log('Ionic Analytics: sent events', eventQueue);
+        cache.set('event_queue', {});
 
       }, function(err) {
 
         if (err === 'in_progress') {
         } else if (err === 'last_call_interrupted') {
-          persistentStorage.storeObject(queueKey, {});
+          cache.set('event_queue', {});
         } else {
 
           // If we didn't connect to the server at all -> keep events
           if (!err.status) {
-            console.log('Error sending analytics data: Failed to connect to analytics server.');
+            console.error('Error sending analytics data: Failed to connect to analytics server.');
           }
 
           // If we connected to the server but our events were rejected -> erase events
           else {
-            console.log('Error sending analytics data: Server responded with error', eventQueue, {
+            console.error('Error sending analytics data: Server responded with error', eventQueue, {
               'status': err.status,
               'error': err.data
             });
-            persistentStorage.storeObject(queueKey, {});
+            cache.set('event_queue', {});
           }
         }
       });
     }
 
     function enqueueEvent(collectionName, eventData) {
-      console.log('enqueueing event', collectionName, eventData);
+      console.log('Ionic Analytics: enqueuing event to send later', collectionName, eventData);
 
       // Add timestamp property to the data
       if (!eventData.keen) {
@@ -173,14 +199,14 @@ angular.module('ionic.service.analytics', ['ionic.service.core'])
       eventData.keen.timestamp = new Date().toISOString();
 
       // Add the data to the queue
-      var eventQueue = persistentStorage.retrieveObject(queueKey) || {};
+      var eventQueue = cache.get('event_queue') || {};
       if (!eventQueue[collectionName]) {
         eventQueue[collectionName] = [];
       }
       eventQueue[collectionName].push(eventData);
 
       // Write the queue to disk
-      persistentStorage.storeObject(queueKey, eventQueue);
+      cache.set('event_queue', eventQueue);
     }
 
     function setDispatchInterval(value) {
@@ -205,67 +231,93 @@ angular.module('ionic.service.analytics', ['ionic.service.core'])
       return dispatchIntervalTime;
     }
 
-    function addEvent(collectionName, eventData) {
-      var payload = {
-        collectionName: [eventData]
-      };
-
-      return requestApiWriteKey().then(function(apiWriteKey) {
-        return $http.post(apiEndpoint, payload, {
-          headers: {
-            "Authorization": apiWriteKey,
-            "Content-Type": "application/json"
-          }
-        });
-      });
-    }
-
-    function addEvents(events) {
-      return requestApiWriteKey().then(function(apiWriteKey) {
-
-        return $http.post(apiEndpoint, events, {
-          headers: {
-            "Authorization": apiWriteKey,
-            "Content-Type": "application/json"
-          }
-        });
-      });
-    }
 
     return {
-      setDispatchInterval: setDispatchInterval,
-      getDispatchInterval: getDispatchInterval,
+
+      // Register to get an analytics key
+      register: function() {
+
+        if (!api.getAppId() || !api.getApiKey()) {
+          var msg = 'You need to provide an app id and api key before calling register().\n    ' +
+                    'See http://docs.ionic.io/v1.0/docs/io-quick-start';
+          throw new Error(msg);
+        }
+
+
+        // Return the cached key if we have one.
+        var d = $q.defer();
+        var cachedKey = cache.get('analytics_key'),
+            cachedDashKey = cache.get('api_key');
+        if (cachedKey && cachedDashKey == api.getApiKey()) {
+          api.setAnalyticsKey(cachedKey);
+          d.resolve(cachedKey);
+        }
+
+        // No key --> request one.
+        else {
+          api.requestAnalyticsKey().then(function(resp) {
+
+            var key = resp.data.write_key;
+            api.setAnalyticsKey(key);
+            cache.set('analytics_key', key);
+            cache.set('api_key', api.getApiKey());
+            d.resolve(key);
+
+          }, function(err) {
+
+            if (err.status == 401) {
+              var msg = 'The api key and app id you provided did not register on the server.\n    ' +
+                        'See http://docs.ionic.io/v1.0/docs/io-quick-start';
+              console.error(msg)
+            } else {
+              console.error('Error registering your api key with the server.', err);
+            }
+
+            d.reject(err);
+          });
+        }
+
+        var self = this;
+        d.promise.then(function() {
+          console.log('Ionic Analytics: Successfully registered analytics key');
+
+          self.track('load');
+
+          setDispatchInterval(30);
+          $timeout(function() {
+            dispatchQueue();
+          });
+        });
+
+        return d.promise;
+      },
+      setDispatchInterval: function(v) {
+        return setDispatchInterval(v);
+      },
+      getDispatchInterval: function() {
+        return getDispatchInterval();
+      },
       track: function(eventName, data) {
-        // Copy objects so they can sit in the queue without being modified
-        var app = $ionicApp.getApp(),
-            user = angular.copy($ionicUser.get());
 
-        if (!app.app_id) {
-          var msg = 'You must provide an app_id to identify your app before tracking analytics data.\n    ' +
-                    'See http://docs.ionic.io/v1.0/docs/io-quick-start'
-          throw new Error(msg)
-        }
-        if (!apiKey) {
-          var msg = 'You must specify an api key before sending analytics data.\n    ' +
+        if (!api.getAppId() || !api.getApiKey()) {
+          var msg = 'You must provide an app id and api key to identify your app before tracking analytics data.\n    ' +
                     'See http://docs.ionic.io/v1.0/docs/io-quick-start'
           throw new Error(msg)
         }
 
-        // Don't expose api keys
-        delete app.api_write_key;
-        delete app.api_read_key;
-
-        // Add user tracking data to everything sent to keen
-        data._app = app;
-        data._user = user;
+        if (!data) data = {};
+        data._app = {
+          app_id: api.getAppId()
+        };
+        data._user = angular.copy($ionicUser.get());
 
         if (!data._ui) data._ui = {};
-        data._ui.activeState = $state.current.name;
+        data._ui.active_state = $state.current.name;
 
         if (useEventCaching) {
           enqueueEvent(eventName, data);
         } else {
-          addEvent(eventName, data);
+          api.postEvent(eventName, data);
         }
       },
     };
