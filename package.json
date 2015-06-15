@@ -1,9 +1,18 @@
 {
-  "name": "ionic-analytics",
+  "name": "ionic-service-analytics",
   "private": true,
   "version": "0.0.2",
+  "description": "Analytics service for Ionic apps",
+  "keywords": [
+    "ionic",
+    "analytics"
+  ],
   "repository": {
-    "url": "git://github.com/driftyco/ionic-service-analytics.git"
+    "type": "git",
+    "url": "https://github.com/driftyco/ionic-service-analytics.git"
+  },
+  "bugs": {
+    "url": "https://github.com/driftyco/ionic-service-analytics/issues"
   },
   "devDependencies": {
     "gulp": "^3.7.0",
