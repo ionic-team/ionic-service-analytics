@@ -184,7 +184,7 @@ angular.module('ionic.service.analytics', ['ionic.service.core'])
     }
 
     function enqueueEvent(collectionName, eventData) {
-      console.log('Ionic Analytics: enqueuing event to send later', collectionName, eventData);
+      console.log('Ionic Analytics: enqueuing event to send later:', collectionName, eventData);
 
       // Add timestamp property to the data
       if (!eventData.keen) {
@@ -232,48 +232,36 @@ angular.module('ionic.service.analytics', ['ionic.service.core'])
       register: function() {
 
         if (!api.getAppId() || !api.getApiKey()) {
-          var msg = 'You need to provide an app id and api key before calling register().\n    ' +
+          var msg = 'You need to provide an app id and api key before calling $ionicAnalytics.register().\n    ' +
                     'See http://docs.ionic.io/v1.0/docs/io-quick-start';
           throw new Error(msg);
         }
 
 
-        // Return the cached key if we have one.
-        var d = $q.defer();
-        var cachedKey = cache.get('analytics_key'),
-            cachedDashKey = cache.get('api_key');
-        if (cachedKey && cachedDashKey == api.getApiKey()) {
-          api.setAnalyticsKey(cachedKey);
-          d.resolve(cachedKey);
-        }
+        // Request Analytics key from server.
+        var promise = api.requestAnalyticsKey().then(function(resp) {
 
-        // No key --> request one.
-        else {
-          api.requestAnalyticsKey().then(function(resp) {
+          var key = resp.data.write_key;
+          api.setAnalyticsKey(key);
 
-            var key = resp.data.write_key;
-            api.setAnalyticsKey(key);
-            cache.set('analytics_key', key);
-            cache.set('api_key', api.getApiKey());
-            d.resolve(key);
+        }, function(err) {
 
-          }, function(err) {
-
-            if (err.status == 401) {
-              var msg = 'The api key and app id you provided did not register on the server.\n    ' +
-                        'See http://docs.ionic.io/v1.0/docs/io-quick-start';
-              console.error(msg)
-            } else {
-              console.error('Error registering your api key with the server.', err);
-            }
-
-            d.reject(err);
-          });
-        }
+          if (err.status == 401) {
+            var msg = 'The api key and app id you provided did not register on the server.\n    ' +
+                      'See http://docs.ionic.io/v1.0/docs/io-quick-start';
+            console.error(msg)
+          } else if (err.status == 404) {
+            var msg = 'The app id you provided (' + api.getAppId() + ') was not found on the server.\n    ' +
+                      'See http://docs.ionic.io/v1.0/docs/io-quick-start';
+            console.error(msg);
+          } else {
+            console.error('Error registering your api key with the server.', err);
+          }
+        });
 
         var self = this;
-        d.promise.then(function() {
-          console.log('Ionic Analytics: Successfully registered analytics key');
+        promise.then(function() {
+          console.log('Ionic Analytics: successfully registered analytics key');
 
           self.track('load');
 
@@ -283,7 +271,7 @@ angular.module('ionic.service.analytics', ['ionic.service.core'])
           });
         });
 
-        return d.promise;
+        return promise;
       },
       setDispatchInterval: function(v) {
         return setDispatchInterval(v);
