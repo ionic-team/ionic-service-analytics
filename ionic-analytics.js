@@ -249,6 +249,7 @@ angular.module('ionic.service.analytics', ['ionic.service.core'])
 
           var key = resp.data.write_key;
           api.setAnalyticsKey(key);
+          return resp;
 
         }, function(err) {
 
@@ -257,12 +258,14 @@ angular.module('ionic.service.analytics', ['ionic.service.core'])
                       'See http://docs.ionic.io/v1.0/docs/io-quick-start';
             console.error(msg)
           } else if (err.status == 404) {
-            var msg = 'The app id you provided (' + api.getAppId() + ') was not found on the server.\n    ' +
+            var msg = 'The app id you provided ("' + api.getAppId() + '") was not found on the server.\n    ' +
                       'See http://docs.ionic.io/v1.0/docs/io-quick-start';
             console.error(msg);
           } else {
             console.error('Error registering your api key with the server.', err);
           }
+
+          return $q.reject(err);
         });
 
         var self = this;
