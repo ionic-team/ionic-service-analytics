@@ -65,7 +65,8 @@ angular.module('ionic.service.analytics', ['ionic.service.core'])
           url: $ionicApp.getApiUrl() + '/api/v1/app/' + this.getAppId() + '/keys/write',
           headers: {
             'Authorization': "basic " + btoa(this.getAppId() + ':' + this.getApiKey())
-          }
+          },
+		  withCredentials: false
         };
         return $http(req);
       },
@@ -86,7 +87,8 @@ angular.module('ionic.service.analytics', ['ionic.service.core'])
           headers: {
             "Authorization": analyticsKey,
             "Content-Type": "application/json"
-          }
+          },
+		  withCredentials: false
         }
 
         return $http(req);
@@ -104,7 +106,8 @@ angular.module('ionic.service.analytics', ['ionic.service.core'])
           headers: {
             "Authorization": analyticsKey,
             "Content-Type": "application/json"
-          }
+          },
+		  withCredentials: false
         }
 
         return $http(req);
