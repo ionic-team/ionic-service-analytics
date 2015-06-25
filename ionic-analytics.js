@@ -40,6 +40,14 @@ angular.module('ionic.service.analytics', ['ionic.service.core'])
 
     var options = {};
 
+    function log(message) {
+      if (options.silent) {
+        return;
+      }
+
+      console.log('Ionic Analytics: ' + message);
+    }
+
     var api = {
       getAppId: function() {
         return $ionicApp.getApp().app_id;
@@ -166,7 +174,7 @@ angular.module('ionic.service.analytics', ['ionic.service.core'])
       }).then(function(data) {
 
         // Success from proxy server. Erase event queue.
-        console.log('Ionic Analytics: sent events', eventQueue);
+        log('sent events', eventQueue);
         cache.set('event_queue', {});
 
       }, function(err) {
@@ -195,11 +203,11 @@ angular.module('ionic.service.analytics', ['ionic.service.core'])
 
     function enqueueEvent(collectionName, eventData) {
       if (options.dryRun) {
-        console.log('Ionic Analytics: event recieved but not sent (dryRun active):', collectionName, eventData);
+        log('event recieved but not sent (dryRun active):', collectionName, eventData);
         return;
       } 
 
-      console.log('Ionic Analytics: enqueuing event to send later:', collectionName, eventData);
+      log('enqueuing event to send later:', collectionName, eventData);
 
       // Add timestamp property to the data
       if (!eventData.keen) {
@@ -254,7 +262,7 @@ angular.module('ionic.service.analytics', ['ionic.service.core'])
 
         options = optionsParam;
         if (options.dryRun) {
-          console.log('Ionic Analytics: dryRun mode is active. Analytics will not send any events.')
+          log('dryRun mode is active. Analytics will not send any events.')
         }
 
         // Request Analytics key from server.
@@ -283,7 +291,7 @@ angular.module('ionic.service.analytics', ['ionic.service.core'])
 
         var self = this;
         promise.then(function() {
-          console.log('Ionic Analytics: successfully registered analytics key');
+          log('successfully registered analytics key');
 
           self.track('load');
 
@@ -322,7 +330,7 @@ angular.module('ionic.service.analytics', ['ionic.service.core'])
           enqueueEvent(eventName, data);
         } else {
           if (options.dryRun) {
-            console.log('Ionic Analytics: dryRun active, will not send event: ', eventName, data);
+            console.log('dryRun active, will not send event: ', eventName, data);
           } else {
             api.postEvent(eventName, data);            
           }
