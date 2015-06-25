@@ -39,7 +39,7 @@ angular.module('ionic.service.analytics', ['ionic.service.core'])
         return;
       }
 
-      console.log('Ionic Analytics: ' + message);
+      console.log.apply(console, arguments);
     }
 
     var api = {
