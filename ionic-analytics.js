@@ -260,7 +260,7 @@ angular.module('ionic.service.analytics', ['ionic.service.core'])
           throw new Error(msg);
         }
 
-        options = optionsParam;
+        options = optionsParam || {};
         if (options.dryRun) {
           log('dryRun mode is active. Analytics will not send any events.')
         }
