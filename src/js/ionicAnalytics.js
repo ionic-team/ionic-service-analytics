@@ -29,9 +29,10 @@ angular.module('ionic.service.analytics', ['ionic.service.core'])
     '$ionicUser', 
     '$interval',
     '$http', 
-    'domSerializer', 
     'persistentStorage',
-  function($q, $timeout, $state, $ionicApp, $ionicUser, $interval, $http, domSerializer, persistentStorage) {
+  function($q, $timeout, $state, $ionicApp, $ionicUser, $interval, $http, persistentStorage) {
+
+    var options = {};
 
     var api = {
       getAppId: function() {
@@ -187,6 +188,11 @@ angular.module('ionic.service.analytics', ['ionic.service.core'])
     }
 
     function enqueueEvent(collectionName, eventData) {
+      if (options.dryRun) {
+        console.log('Ionic Analytics: event recieved but not sent (dryRun active):', collectionName, eventData);
+        return;
+      } 
+
       console.log('Ionic Analytics: enqueuing event to send later:', collectionName, eventData);
 
       // Add timestamp property to the data
@@ -232,7 +238,7 @@ angular.module('ionic.service.analytics', ['ionic.service.core'])
     return {
 
       // Register to get an analytics key
-      register: function() {
+      register: function(optionsParam) {
 
         if (!api.getAppId() || !api.getApiKey()) {
           var msg = 'You need to provide an app id and api key before calling $ionicAnalytics.register().\n    ' +
@@ -240,6 +246,10 @@ angular.module('ionic.service.analytics', ['ionic.service.core'])
           throw new Error(msg);
         }
 
+        options = optionsParam;
+        if (options.dryRun) {
+          console.log('Ionic Analytics: dryRun mode is active. Analytics will not send any events.')
+        }
 
         // Request Analytics key from server.
         var promise = api.requestAnalyticsKey().then(function(resp) {
@@ -305,7 +315,11 @@ angular.module('ionic.service.analytics', ['ionic.service.core'])
         if (useEventCaching) {
           enqueueEvent(eventName, data);
         } else {
-          api.postEvent(eventName, data);
+          if (options.dryRun) {
+            console.log('Ionic Analytics: dryRun active, will not send event: ', eventName, data);
+          } else {
+            api.postEvent(eventName, data);            
+          }
         }
       },
     };
