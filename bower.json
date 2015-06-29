@@ -16,7 +16,7 @@
     "tests"
   ],
   "dependencies": {
-    "ionic-service-core": ">=0.0.1"
+    "ionic-service-core": ">=0.1.7"
   },
   "devDependencies": {}
 }
