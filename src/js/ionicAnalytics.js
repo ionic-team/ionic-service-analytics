@@ -50,7 +50,14 @@ angular.module('ionic.service.analytics', ['ionic.service.core'])
         return $ionicApp.getApiKey();
       },
       getApiServer: function() {
-        return $ionicApp.getValue('analytics_api_server');
+        var server = $ionicApp.getValue('analytics_api_server');
+        if (!server) {
+          var msg = 'Ionic Analytics: You are using an old version of ionic-service-core. Update by running:\n    ' +
+                    'ionic rm ionic-service-core\n    ' +
+                    'ionic add ionic-service-core';
+          throw Error(msg);
+        }
+        return server;
       },
       getAnalyticsKey: function() {
         return this.analyticsKey;
@@ -69,7 +76,7 @@ angular.module('ionic.service.analytics', ['ionic.service.core'])
           headers: {
             'Authorization': "basic " + btoa(this.getAppId() + ':' + this.getApiKey())
           },
-		  withCredentials: false
+		      withCredentials: false
         };
         return $http(req);
       },
