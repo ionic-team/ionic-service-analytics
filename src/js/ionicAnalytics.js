@@ -343,44 +343,62 @@ angular.module('ionic.service.analytics', ['ionic.service.core'])
 
 
 .factory('domSerializer', function() {
-  var getElementTreeXPath = function(element) {
-    // Calculate the XPath of a given element
-    var paths = [];
 
-    // Use nodeName (instead of localName) so namespace prefix is included (if any).
-    for (; element && element.nodeType == 1; element = element.parentNode)
-    {
-      var index = 0;
-      for (var sibling = element.previousSibling; sibling; sibling = sibling.previousSibling)
-      {
-        // Ignore document type declaration.
-        if (sibling.nodeType == Node.DOCUMENT_TYPE_NODE)
-          continue;
+  function elementFullCssPath(element) {
+    // iterate up the dom
+    var selectors = [];
+    while (element.tagName !== 'HTML') {
+      var selector = element.tagName.toLowerCase();
 
-        if (sibling.nodeName == element.nodeName)
-          ++index;
+      var id = element.getAttribute('id');
+      if (id) {
+        selector += "#" + id;
       }
 
-      var tagName = element.nodeName.toLowerCase();
-      var pathIndex = (index ? "[" + (index+1) + "]" : "");
-      paths.splice(0, 0, tagName + pathIndex);
+      var className = element.className;
+      if (className) {
+        var classes = className.split(' ');
+        for (var i = 0; i < classes.length; i++) {
+          var c = classes[i];
+          if (c) {
+            selector += '.' + c;
+          }
+        };
+      }
+
+      var childIndex = Array.prototype.indexOf.call(element.parentNode.children, element);
+      selector += ':nth-child(' + (childIndex + 1) + ')';
+
+      element = element.parentNode;
+      selectors.push(selector);
     }
 
-    return paths.length ? "/" + paths.join("/") : null;
+    return selectors.reverse().join('>');
+  }
+
+  function elementIdentifierOrId(element) {
+    // 1. ion-track-name directive
+    var name = element.getAttribute('ion-track-name');
+    if (name) {
+      return name;
+    }
+
+    // 2. id
+    var id = element.getAttribute('id');
+    if (id) {
+      return id;
+    }
+
+    // 3. no unique identifier --> return null
+    return null;
   }
 
   return {
-    serializeElement: function(element) {
-      // Code appropriated from open source project FireBug
-      if (element && element.id)
-        return '//*[@id="' + element.id + '"]';
-      else
-        return getElementTreeXPath(element);
+    elementSelector: function(element) {
+      return elementFullCssPath(element);
     },
-
-    deserializeElement: function(xpath, context) {
-      var searchResult = document.evaluate(xpath, context || document);
-      return searchResult.iterateNext();
+    elementName: function(element) {
+      return elementIdentifierOrId(element);
     }
   }
 })

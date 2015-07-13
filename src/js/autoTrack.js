@@ -42,20 +42,18 @@ angular.module('ionic.service.analytics')
         normX = (x - box.left) / width,
         normY = (y - box.top) / height;
 
-    // Now get an xpath reference to the target element
-    var elementSerialized = domSerializer.serializeElement(event.target);
-
     var tapData = {
-      coords: {
+      coordinates: {
         x: x,
         y: y
       },
-      element: elementSerialized
+      target: domSerializer.elementSelector(event.target),
+      targetIdentifier: domSerializer.elementName(event.target)
     };
 
     if (isFinite(normX) && isFinite(normY)) {
-      tapData.coords.x_norm = normX;
-      tapData.coords.y_norm = normY;
+      tapData.coordinates.x_norm = normX;
+      tapData.coordinates.y_norm = normY;
     }
 
     return tapData;
