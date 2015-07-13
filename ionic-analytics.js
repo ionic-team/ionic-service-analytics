@@ -6,6 +6,8 @@
 (function(){
 angular.module('ionic.service.analytics', ['ionic.service.core'])
 
+.value('ionicAnalyticsVersion', '0.1.2')
+
 /**
  * @ngdoc service
  * @name $ionicAnalytics
@@ -36,7 +38,8 @@ angular.module('ionic.service.analytics', ['ionic.service.core'])
     '$interval',
     '$http',
     'persistentStorage',
-  function($q, $timeout, $state, $ionicApp, $ionicUser, $interval, $http, persistentStorage) {
+    'ionicAnalyticsVersion',
+  function($q, $timeout, $state, $ionicApp, $ionicUser, $interval, $http, persistentStorage, ionicAnalyticsVersion) {
 
     var options = {};
 
@@ -325,7 +328,8 @@ angular.module('ionic.service.analytics', ['ionic.service.core'])
 
         if (!data) data = {};
         data._app = {
-          app_id: api.getAppId()
+          app_id: api.getAppId(),
+          analytics_version: ionicAnalyticsVersion
         };
         data._user = angular.copy($ionicUser.get());
 
