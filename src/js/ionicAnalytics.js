@@ -28,7 +28,7 @@ angular.module('ionic.service.analytics', ['ionic.service.core'])
     '$ionicApp', 
     '$ionicUser', 
     '$interval',
-    '$http', 
+    '$http',
     'persistentStorage',
   function($q, $timeout, $state, $ionicApp, $ionicUser, $interval, $http, persistentStorage) {
 
@@ -294,8 +294,6 @@ angular.module('ionic.service.analytics', ['ionic.service.core'])
         promise.then(function() {
           log('successfully registered analytics key');
 
-          self.track('load');
-
           setDispatchInterval(30);
           $timeout(function() {
             dispatchQueue();
@@ -328,13 +326,17 @@ angular.module('ionic.service.analytics', ['ionic.service.core'])
         data._ui.active_state = $state.current.name;
 
         if (useEventCaching) {
-          enqueueEvent(eventName, data);
+          $timeout(function() {
+            enqueueEvent(eventName, data);            
+          })
         } else {
-          if (options.dryRun) {
-            console.log('dryRun active, will not send event: ', eventName, data);
-          } else {
-            api.postEvent(eventName, data);            
-          }
+          $timeout(function() {
+            if (options.dryRun) {
+              console.log('dryRun active, will not send event: ', eventName, data);
+            } else {
+              api.postEvent(eventName, data);            
+            }            
+          })
         }
       },
     };
