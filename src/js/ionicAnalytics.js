@@ -38,6 +38,7 @@ angular.module('ionic.service.analytics', ['ionic.service.core'])
       if (options.silent) {
         return;
       }
+      message = 'Ionic Analytics: ' + message;
 
       console.log.apply(console, arguments);
     }

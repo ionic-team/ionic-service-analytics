@@ -44,6 +44,7 @@ angular.module('ionic.service.analytics', ['ionic.service.core'])
       if (options.silent) {
         return;
       }
+      message = 'Ionic Analytics: ' + message;
 
       console.log.apply(console, arguments);
     }
@@ -414,27 +415,28 @@ angular.module('ionic.service.analytics', ['ionic.service.core'])
 
 angular.module('ionic.service.analytics')
 
-.factory('$ionicAutoTrack', [function(){
+.provider('$ionicAutoTrack',[function(){
 
-  var trackersEnabled = {};
+  var trackersDisabled = {},
+      allTrackersDisabled = false;
 
-  return {
-    disableTracker: function(tracker) {
-      trackersEnabled[tracker] = false;
-    },
-    enableTracker: function(tracker) {
-      trackersEnabled[tracker] = true;
-    },
-    isEnabled: function(tracker) {
-      return trackersEnabled[tracker];
-    },
-    addTracker: function(tracker) {
-      if (!trackersEnabled.hasOwnProperty(tracker)) {
-        trackersEnabled[tracker] = true;      
-      }
+  this.disableTracking = function(tracker) {
+    if (tracker) {
+     trackersDisabled[tracker] = true;
+    } else {
+      allTrackersDisabled = true;
     }
   }
+
+  this.$get = [function() {
+    return {
+      isEnabled: function(tracker) {
+        return !allTrackersDisabled && !trackersDisabled[tracker];
+      }
+    }
+  }]
 }])
+
 
 //================================================================================
 // Auto trackers
@@ -442,11 +444,12 @@ angular.module('ionic.service.analytics')
 
 
 .run(['$ionicAutoTrack', '$ionicAnalytics', function($ionicAutoTrack, $ionicAnalytics) {
-
-  $ionicAutoTrack.addTracker('Load');
-  if ($ionicAutoTrack.isEnabled('Load')) {
-    $ionicAnalytics.track('Load');    
+ 
+  if (!$ionicAutoTrack.isEnabled('Load')) {
+    return;
   }
+
+  $ionicAnalytics.track('Load');    
 }])
 
 .run([
@@ -456,13 +459,11 @@ angular.module('ionic.service.analytics')
   'domSerializer',
 function($ionicAutoTrack, $document, $ionicAnalytics, domSerializer) {
 
-  $ionicAutoTrack.addTracker('Tap');
+  if (!$ionicAutoTrack.isEnabled('Tap')) {
+    return;
+  }
 
   $document.on('click', function(event) {
-
-    if (!$ionicAutoTrack.isEnabled('Tap')) {
-      return;
-    }
 
     // calculate coordinates as a percentage relative to the target element
     var x = event.pageX,
