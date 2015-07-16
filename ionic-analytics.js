@@ -16,7 +16,7 @@ angular.module('ionic.service.analytics', ['ionic.service.core'])
  *
  * A simple yet powerful analytics tracking system.
  *
- * The simple format is eventName, eventData. Both are arbitrary but the eventName
+ * The simple format is eventCollection, eventData. Both are arbitrary but the eventCollection
  * should be the same as previous events if you wish to query on them later.
  *
  * @usage
@@ -30,16 +30,15 @@ angular.module('ionic.service.analytics', ['ionic.service.core'])
 .provider('$ionicAnalytics', function() {
 
   this.$get = [
-    '$q', 
-    '$timeout', 
-    '$state', 
-    '$ionicApp', 
-    '$ionicUser', 
+    '$q',
+    '$timeout',
+    '$rootScope',
+    '$ionicApp',
+    '$ionicUser',
     '$interval',
     '$http',
     'persistentStorage',
-    'VERSION_NUMBER',
-  function($q, $timeout, $state, $ionicApp, $ionicUser, $interval, $http, persistentStorage, VERSION_NUMBER) {
+  function($q, $timeout, $rootScope, $ionicApp, $ionicUser, $interval, $http, persistentStorage) {
 
     var options = {};
 
@@ -207,7 +206,7 @@ angular.module('ionic.service.analytics', ['ionic.service.core'])
       if (options.dryRun) {
         console.log('Ionic Analytics: event recieved but not sent (dryRun active):', collectionName, eventData);
         return;
-      } 
+      }
 
       console.log('Ionic Analytics: enqueuing event to send later:', collectionName, eventData);
 
@@ -250,6 +249,8 @@ angular.module('ionic.service.analytics', ['ionic.service.core'])
       return dispatchIntervalTime;
     }
 
+    var globalProperties = {};
+    var globalPropertiesFns = [];
 
     return {
 
@@ -303,13 +304,45 @@ angular.module('ionic.service.analytics', ['ionic.service.core'])
 
         return promise;
       },
+      unsetGlobalProperty: function(prop) {
+        if (typeof prop === 'string') {
+          delete globalProperties[prop];
+        }
+        else if (typeof prop === 'function') {
+          var i = globalPropertiesFns.indexOf(prop);
+          if (i == -1) {
+            throw Error('Ionic Analytics: The function passed to unsetGlobalProperty was not a global property.');
+          }
+          globalPropertiesFns.splice(i, 1);
+        }
+        else {
+          throw Error('Ionic Analytics: unsetGlobalProperty parameter must be a string or function.');
+        }
+      },
+      setGlobalProperties: function(prop) {
+        if (typeof prop === 'object') {
+          for (var key in prop) {
+            if (!prop.hasOwnProperty(key)) {
+              continue;
+            }
+
+            globalProperties[key] = prop[key];
+          }
+        }
+        else if (typeof prop === 'function') {
+          globalPropertiesFns.push(prop);
+        }
+        else {
+          throw Error('Ionic Analytics: setGlobalProperties parameter must be an object or function.');
+        }
+      },
       setDispatchInterval: function(v) {
         return setDispatchInterval(v);
       },
       getDispatchInterval: function() {
         return getDispatchInterval();
       },
-      track: function(eventName, data) {
+      track: function(eventCollection, eventData) {
 
         if (!api.getAppId() || !api.getApiKey()) {
           var msg = 'You must provide an app id and api key to identify your app before tracking analytics data.\n    ' +
@@ -317,27 +350,34 @@ angular.module('ionic.service.analytics', ['ionic.service.core'])
           throw new Error(msg)
         }
 
-        if (!data) data = {};
-        data._app = {
-          app_id: api.getAppId(),
-          analytics_version: VERSION_NUMBER
-        };
-        data._user = angular.copy($ionicUser.get());
+        if (!eventData) eventData = {};
 
-        if (!data._ui) data._ui = {};
-        data._ui.active_state = $state.current.name;
+        for (var key in globalProperties) {
+          if (!globalProperties.hasOwnProperty(key)) {
+            continue;
+          }
+
+          if (eventData[key] === void 0) {
+            eventData[key] = globalProperties[key];
+          }
+        };
+
+        for (var i = 0; i < globalPropertiesFns.length; i++) {
+          var fn = globalPropertiesFns[i];
+          fn.call($rootScope, eventCollection, eventData);
+        };
 
         if (useEventCaching) {
           $timeout(function() {
-            enqueueEvent(eventName, data);            
+            enqueueEvent(eventCollection, eventData);
           })
         } else {
           $timeout(function() {
             if (options.dryRun) {
-              console.log('Ionic Analytics: dryRun active, will not send event: ', eventName, data);
+              console.log('Ionic Analytics: dryRun active, will not send event: ', eventCollection, eventData);
             } else {
-              api.postEvent(eventName, data);            
-            }            
+              api.postEvent(eventCollection, eventData);
+            }
           })
         }
       },
@@ -345,6 +385,40 @@ angular.module('ionic.service.analytics', ['ionic.service.core'])
   }];
 })
 
+//================================================================================
+// Global events
+//================================================================================
+
+.run([
+  '$ionicAnalytics',
+  '$ionicApp',
+  '$ionicUser',
+  'VERSION_NUMBER',
+function($ionicAnalytics, $ionicApp, $ionicUser, VERSION_NUMBER) {
+  $ionicAnalytics.setGlobalProperties(function(eventCollection, eventData) {
+
+    eventData._user = angular.copy($ionicUser.get());
+    eventData._app = {
+      app_id: $ionicApp.getApp().app_id,
+      analytics_version: VERSION_NUMBER
+    };
+
+  })
+}])
+
+.run(['$ionicAnalytics', '$state', function($ionicAnalytics, $state) {
+  $ionicAnalytics.setGlobalProperties(function(eventCollection, eventData) {
+
+    if (!eventData._ui) eventData._ui = {};
+    eventData._ui.active_state = $state.current.name;
+
+  });
+}])
+
+
+//================================================================================
+// Utils
+//================================================================================
 
 .factory('domSerializer', function() {
 
