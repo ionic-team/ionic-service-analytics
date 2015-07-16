@@ -29,11 +29,9 @@ angular.module('ionic.service.analytics')
 
 
 .run(['$ionicAutoTrack', '$ionicAnalytics', function($ionicAutoTrack, $ionicAnalytics) {
- 
   if (!$ionicAutoTrack.isEnabled('Load')) {
     return;
   }
-
   $ionicAnalytics.track('Load');    
 }])
 
@@ -43,26 +41,22 @@ angular.module('ionic.service.analytics')
   '$ionicAnalytics',
   'domSerializer',
 function($ionicAutoTrack, $document, $ionicAnalytics, domSerializer) {
-
   if (!$ionicAutoTrack.isEnabled('Tap')) {
     return;
   }
 
   $document.on('click', function(event) {
-
-    // calculate coordinates as a percentage relative to the target element
-    var x = event.pageX,
-        y = event.pageY,
-        box = event.target.getBoundingClientRect(),
+    // want coordinates as a percentage relative to the target element
+    var box = event.target.getBoundingClientRect(),
         width = box.right - box.left,
         height = box.bottom - box.top,
-        normX = (x - box.left) / width,
-        normY = (y - box.top) / height;
+        normX = (event.pageX - box.left) / width,
+        normY = (event.pageY - box.top) / height;
 
     var eventData = {
       coordinates: {
-        x: x,
-        y: y
+        x: event.pageX,
+        y: event.pageY
       },
       target: domSerializer.elementSelector(event.target),
       target_identifier: domSerializer.elementName(event.target)
@@ -78,6 +72,26 @@ function($ionicAutoTrack, $document, $ionicAnalytics, domSerializer) {
     });
 
   });
+}])
+
+.run([
+  '$ionicAutoTrack',
+  '$ionicAnalytics',
+  '$rootScope',
+function($ionicAutoTrack, $ionicAnalytics, $rootScope) {
+  if (!$ionicAutoTrack.isEnabled('State Change')) {
+    return;
+  }
+
+  $rootScope.$on('$stateChangeSuccess', 
+    function(event, toState, toParams, fromState, fromParams) 
+  {
+    $ionicAnalytics.track('State Change', {
+      from: fromState.name,
+      to: toState.name
+    })
+  });
+
 }])
 
 
