@@ -6,7 +6,7 @@
 (function(){
 angular.module('ionic.service.analytics', ['ionic.service.core'])
 
-.value('VERSION_NUMBER', '0.1.2')
+.value('VERSION_NUMBER', '0.2.0')
 
 /**
  * @ngdoc service
