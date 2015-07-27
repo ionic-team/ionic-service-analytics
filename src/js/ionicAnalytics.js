@@ -28,23 +28,45 @@ angular.module('ionic.service.analytics', ['ionic.service.core'])
     '$timeout',
     '$rootScope',
     '$ionicApp',
+    '$ionicCoreSettings',
     '$ionicUser',
     '$interval',
     '$http',
     'persistentStorage',
-  function($q, $timeout, $rootScope, $ionicApp, $ionicUser, $interval, $http, persistentStorage) {
+  function($q, $timeout, $rootScope, $ionicApp, $ionicCoreSettings, $ionicUser, $interval, $http, persistentStorage) {
 
     var options = {};
 
+    var get_ionic_app_id = function() {
+      if ($ionicCoreSettings.get('app_id')) {
+        return $ionicCoreSettings.get('app_id')
+      } else if ($ionicApp.getApp().app_id) {
+        return $ionicApp.getApp().app_id
+      } else {
+        return null;
+      }
+    };
+
+
     var api = {
       getAppId: function() {
-        return $ionicApp.getApp().app_id;
+        return get_ionic_app_id();
       },
       getApiKey: function() {
-        return $ionicApp.getApiKey();
+        if($ionicCoreSettings.get('api_key')) {
+          return $ionicCoreSettings.get('api_key');
+        } else {
+          return $ionicApp.getApiKey();
+        }
       },
       getApiServer: function() {
-        var server = $ionicApp.getValue('analytics_api_server');
+        var server = false;
+        if($ionicCoreSettings.get('analytics_api_server')) {
+          server = $ionicCoreSettings.get('analytics_api_server');
+        } else {
+          server = $ionicApp.getValue('analytics_api_server');
+        }
+
         if (!server) {
           var msg = 'Ionic Analytics: You are using an old version of ionic-service-core. Update by running:\n    ' +
                     'ionic rm ionic-service-core\n    ' +
@@ -63,14 +85,19 @@ angular.module('ionic.service.analytics', ['ionic.service.core'])
         return !!this.analyticsKey;
       },
       requestAnalyticsKey: function() {
-
+        var host = '';
+        if($ionicCoreSettings.get('api_server')) {
+          host = $ionicCoreSettings.get('api_server');
+        } else {
+          host = $ionicApp.getApiUrl();
+        }
         var req = {
           method: 'GET',
-          url: $ionicApp.getApiUrl() + '/api/v1/app/' + this.getAppId() + '/keys/write',
+          url: host + '/api/v1/app/' + this.getAppId() + '/keys/write',
           headers: {
             'Authorization': "basic " + btoa(this.getAppId() + ':' + this.getApiKey())
           },
-		      withCredentials: false
+          withCredentials: false
         };
         return $http(req);
       },
@@ -386,14 +413,26 @@ angular.module('ionic.service.analytics', ['ionic.service.core'])
 .run([
   '$ionicAnalytics',
   '$ionicApp',
+  '$ionicCoreSettings',
   '$ionicUser',
   'VERSION_NUMBER',
-function($ionicAnalytics, $ionicApp, $ionicUser, VERSION_NUMBER) {
+function($ionicAnalytics, $ionicApp, $ionicCoreSettings, $ionicUser, VERSION_NUMBER) {
+
+  var get_ionic_app_id = function() {
+    if ($ionicCoreSettings.get('app_id')) {
+      return $ionicCoreSettings.get('app_id')
+    } else if ($ionicApp.getApp().app_id) {
+      return $ionicApp.getApp().app_id
+    } else {
+      return null;
+    }
+  };
+
   $ionicAnalytics.setGlobalProperties(function(eventCollection, eventData) {
 
     eventData._user = angular.copy($ionicUser.get());
     eventData._app = {
-      app_id: $ionicApp.getApp().app_id,
+      app_id: get_ionic_app_id(),
       analytics_version: VERSION_NUMBER
     };
 
