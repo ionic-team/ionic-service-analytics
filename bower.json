@@ -1,6 +1,6 @@
 {
   "name": "ionic-service-analytics",
-  "version": "0.2.1",
+  "version": "0.2.2,
   "homepage": "http://ionic.io",
   "authors": [
     "Max Lynch <max@ionicframework.com>"
@@ -16,7 +16,7 @@
     "tests"
   ],
   "dependencies": {
-    "ionic-service-core": ">=0.1.8"
+    "ionic-service-core": ">=0.1.9"
   },
   "devDependencies": {}
 }

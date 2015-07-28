@@ -14,7 +14,7 @@
     "url": "https://github.com/driftyco/ionic-service-analytics/issues"
   },
   "dependencies": {
-    "ionic-service-core": ">=0.1.8"
+    "ionic-service-core": ">=0.1.9"
   },
   "devDependencies": {
     "gulp": "^3.7.0",
