@@ -13,7 +13,7 @@ module.exports = {
 
   dist: '.',
 
-  jsFiles: ['src/js/ionicAnalytics.js', 'src/js/autoTrack.js'],
+  jsFiles: ['src/js/ionicAnalytics.js', 'src/js/bucketStorage.js', 'src/js/autoTrack.js'],
 
   versionData: {
     version: pkg.version

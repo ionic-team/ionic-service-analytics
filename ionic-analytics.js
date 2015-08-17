@@ -6,7 +6,7 @@
 (function(){
 angular.module('ionic.service.analytics', ['ionic.service.core'])
 
-.value('VERSION_NUMBER', '0.2.4')
+.value('IONIC_ANALYTICS_VERSION', '0.2.4')
 
 /**
  * @ngdoc service
@@ -14,10 +14,7 @@ angular.module('ionic.service.analytics', ['ionic.service.core'])
  * @module ionic.services.analytics
  * @description
  *
- * A simple yet powerful analytics tracking system.
- *
- * The simple format is eventCollection, eventData. Both are arbitrary but the eventCollection
- * should be the same as previous events if you wish to query on them later.
+ * Ionic Analytics' main service. See http://docs.ionic.io/docs/analytics-auto-tracking for details.
  *
  * @usage
  * ```javascript
@@ -38,8 +35,9 @@ angular.module('ionic.service.analytics', ['ionic.service.core'])
     '$ionicUser',
     '$interval',
     '$http',
+    'bucketStorage',
     'persistentStorage',
-  function($q, $timeout, $rootScope, $ionicApp, $ionicCoreSettings, $ionicUser, $interval, $http, persistentStorage) {
+  function($q, $timeout, $rootScope, $ionicApp, $ionicCoreSettings, $ionicUser, $interval, $http, bucketStorage, persistentStorage) {
 
     var options = {};
 
@@ -125,7 +123,7 @@ angular.module('ionic.service.analytics', ['ionic.service.core'])
             "Authorization": analyticsKey,
             "Content-Type": "application/json"
           },
-		  withCredentials: false
+		      withCredentials: false
         }
 
         return $http(req);
@@ -144,26 +142,14 @@ angular.module('ionic.service.analytics', ['ionic.service.core'])
             "Authorization": analyticsKey,
             "Content-Type": "application/json"
           },
-		  withCredentials: false
+		      withCredentials: false
         }
 
         return $http(req);
       }
     }
 
-    var cache = {
-      get: function(key) {
-        key = this.scopeKey(key);
-        return persistentStorage.retrieveObject(key);
-      },
-      set: function(key, value) {
-        key = this.scopeKey(key);
-        return persistentStorage.storeObject(key, value);
-      },
-      scopeKey: function(key) {
-        return 'ionic_analytics_' + key + '_' + api.getAppId();
-      }
-    };
+    var cache = bucketStorage.bucket('ionic_analytics');
 
     var useEventCaching = true,
         dispatchInterval,
@@ -256,7 +242,7 @@ angular.module('ionic.service.analytics', ['ionic.service.core'])
 
     function setDispatchInterval(value) {
       // Set how often we should send batch events to Keen, in seconds.
-      // Set this to a nonpositive number to disable event caching
+      // Set this to 0 to disable event caching
       dispatchIntervalTime = value;
 
       // Clear the existing interval and set a new one.
@@ -412,17 +398,17 @@ angular.module('ionic.service.analytics', ['ionic.service.core'])
   }];
 })
 
-//================================================================================
+//=============================================================================
 // Global events
-//================================================================================
+//=============================================================================
 
 .run([
   '$ionicAnalytics',
   '$ionicApp',
   '$ionicCoreSettings',
   '$ionicUser',
-  'VERSION_NUMBER',
-function($ionicAnalytics, $ionicApp, $ionicCoreSettings, $ionicUser, VERSION_NUMBER) {
+  'IONIC_ANALYTICS_VERSION',
+function($ionicAnalytics, $ionicApp, $ionicCoreSettings, $ionicUser, IONIC_ANALYTICS_VERSION) {
 
   var get_ionic_app_id = function() {
     if ($ionicCoreSettings.get('app_id')) {
@@ -439,7 +425,7 @@ function($ionicAnalytics, $ionicApp, $ionicCoreSettings, $ionicUser, VERSION_NUM
     eventData._user = angular.copy($ionicUser.get());
     eventData._app = {
       app_id: get_ionic_app_id(),
-      analytics_version: VERSION_NUMBER
+      analytics_version: IONIC_ANALYTICS_VERSION
     };
 
   })
@@ -455,9 +441,9 @@ function($ionicAnalytics, $ionicApp, $ionicCoreSettings, $ionicUser, VERSION_NUM
 }])
 
 
-//================================================================================
+//=============================================================================
 // Utils
-//================================================================================
+//=============================================================================
 
 .factory('domSerializer', function() {
 
@@ -523,6 +509,53 @@ function($ionicAnalytics, $ionicApp, $ionicCoreSettings, $ionicUser, VERSION_NUM
   }
 })
 
+
+//=============================================================================
+// Each bucket gets its own namespace in localStorage.
+//=============================================================================
+
+angular.module('ionic.service.analytics')
+
+.factory('bucketStorage', [
+  'persistentStorage',
+  '$ionicCoreSettings',
+  '$ionicApp',
+function(persistentStorage, $ionicCoreSettings, $ionicApp) {
+
+  function Bucket(name) {
+    this.name = name;
+  }
+
+  Bucket.prototype.get = function(key) {
+    key = this.scopeKey(key);
+    return persistentStorage.retrieveObject(key);
+  }
+
+  Bucket.prototype.set = function(key, value) {
+    key = this.scopeKey(key);
+    return persistentStorage.storeObject(key, value);
+  }
+
+  Bucket.prototype.scopeKey = function(key) {
+    return this.name + '_' + key + '_' + appId();
+  }
+
+  function appId() {
+    if ($ionicCoreSettings.get('app_id')) {
+      return $ionicCoreSettings.get('app_id')
+    } else if ($ionicApp.getApp().app_id) {
+      return $ionicApp.getApp().app_id
+    } else {
+      return null;
+    }
+  }
+
+  return {
+    bucket: function(name) {
+      return new Bucket(name);
+    }
+  }
+}])
 
 angular.module('ionic.service.analytics')
 
