@@ -35,6 +35,12 @@ angular.module('ionic.service.analytics', ['ionic.service.core'])
 
     var options = {};
 
+    function maybeLog() {
+      if (!options.silent) {
+        console.log.apply(console, arguments);
+      }
+    }
+
     var get_ionic_app_id = function() {
       if ($ionicCoreSettings.get('app_id')) {
         return $ionicCoreSettings.get('app_id')
@@ -182,7 +188,7 @@ angular.module('ionic.service.analytics', ['ionic.service.core'])
       }).then(function(data) {
 
         // Success from proxy server. Erase event queue.
-        console.log('Ionic Analytics: sent events', eventQueue);
+        maybeLog('Ionic Analytics: sent events', eventQueue);
         cache.set('event_queue', {});
 
       }, function(err) {
@@ -211,11 +217,11 @@ angular.module('ionic.service.analytics', ['ionic.service.core'])
 
     function enqueueEvent(collectionName, eventData) {
       if (options.dryRun) {
-        console.log('Ionic Analytics: event recieved but not sent (dryRun active):', collectionName, eventData);
+        maybeLog('Ionic Analytics: event recieved but not sent (dryRun active):', collectionName, eventData);
         return;
       }
 
-      console.log('Ionic Analytics: enqueuing event to send later:', collectionName, eventData);
+      maybeLog('Ionic Analytics: enqueuing event to send later:', collectionName, eventData);
 
       // Add timestamp property to the data
       if (!eventData.keen) {
@@ -272,7 +278,7 @@ angular.module('ionic.service.analytics', ['ionic.service.core'])
 
         options = optionsParam || {};
         if (options.dryRun) {
-          console.log('Ionic Analytics: dryRun mode is active. Analytics will not send any events.')
+          maybeLog('Ionic Analytics: dryRun mode is active. Analytics will not send any events.')
         }
 
         // Request Analytics key from server.
@@ -301,7 +307,7 @@ angular.module('ionic.service.analytics', ['ionic.service.core'])
 
         var self = this;
         promise.then(function() {
-          console.log('Ionic Analytics: successfully registered analytics key');
+          maybeLog('Ionic Analytics: successfully registered analytics key');
 
           setDispatchInterval(30);
           $timeout(function() {
@@ -381,7 +387,7 @@ angular.module('ionic.service.analytics', ['ionic.service.core'])
         } else {
           $timeout(function() {
             if (options.dryRun) {
-              console.log('Ionic Analytics: dryRun active, will not send event: ', eventCollection, eventData);
+              maybeLog('Ionic Analytics: dryRun active, will not send event: ', eventCollection, eventData);
             } else {
               api.postEvent(eventCollection, eventData);
             }
