@@ -477,6 +477,9 @@ function($ionicAnalytics, $ionicApp, $ionicCoreSettings, $ionicUser, VERSION_NUM
         };
       }
 
+      if (!element.parentNode) {
+        return null;
+      }
       var childIndex = Array.prototype.indexOf.call(element.parentNode.children, element);
       selector += ':nth-child(' + (childIndex + 1) + ')';
 
