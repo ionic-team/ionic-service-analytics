@@ -5,15 +5,18 @@ module.exports = {
   banner:
     '/*!\n' +
     ' * Ionic Analytics Client\n' +
-    ' * Copyright 2014 Drifty Co. http://drifty.com/\n' +
+    ' * Copyright 2015 Drifty Co. http://drifty.com/\n' +
     ' * See LICENSE in this repository for license information\n' +
     ' */\n',
-  closureStart: '(function(){\n',
-  closureEnd: '\n})();',
 
   dist: '.',
 
-  jsFiles: ['src/js/ionicAnalytics.js', 'src/js/bucketStorage.js', 'src/js/autoTrack.js'],
+  jsFiles: [
+    'src/js/storage.js',
+    'src/js/serializers.js',
+    'src/js/analytics.js',
+    'src/js/angular-integration.js'
+  ],
 
   versionData: {
     version: pkg.version

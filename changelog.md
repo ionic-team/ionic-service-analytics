@@ -1,6 +1,20 @@
 Changelog
 =========
 
+## 0.3.0
+
+* ES6 based build system
+* Updated ionic-service-core dependency
+* Angular is now an integration rather than a dependency
+
+
+## 0.2.5
+
+* Added BucketStorage
+* Re-added silent option
+* misc bug fixes
+
+
 ## 0.2.4
 
 * Updating js version
