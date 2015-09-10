@@ -1,9 +1,9 @@
 (function() {
 
-  var ApiRequest = ionic.io.util.ApiRequest;
-  var DeferredPromise = ionic.io.util.DeferredPromise;
-  var Logger = ionic.io.util.Logger;
-  var Settings = new ionic.io.core.Settings();
+  var ApiRequest = Ionic.IO.ApiRequest;
+  var DeferredPromise = Ionic.IO.DeferredPromise;
+  var Settings = new Ionic.IO.Settings();
+  var Core = Ionic.IO.Core;
 
   var ANALYTICS_KEY = null;
   var options = {};
@@ -12,21 +12,26 @@
 
   class Analytics {
 
-    constructor() {
+    constructor(config) {
       this._dispatcher = null;
       this._dispatchIntervalTime = 30;
       this._useEventCaching = true;
       this._serviceHost = Settings.getURL('analytics');
 
-      this.logger = new Logger({
+      this.logger = new Ionic.IO.Logger({
         'prefix': 'Ionic Analytics:'
       });
 
       this.logger._silence = true;
 
-      this.storage = ionic.io.core.main.storage;
-      this.cache = new ionic.io.analytics.BucketStorage('ionic_analytics');
+      this.storage = Ionic.IO.Core.getStorage();
+      this.cache = new Ionic.AnalyticStorage.BucketStorage('ionic_analytics');
       this._addGlobalPropertyDefaults();
+      this.register(config);
+    }
+
+    static get version() {
+      return 'ANALYTICS_VERSION_STRING';
     }
 
     _addGlobalPropertyDefaults() {
@@ -35,7 +40,7 @@
         // eventData._user = JSON.parse(JSON.stringify($ionicUser.get());
         eventData._app = {
           "app_id": Settings.get('app_id'), // eslint-disable-line
-          "analytics_version": ionic.io.analytics.version
+          "analytics_version": Ionic.Analytics.version
         };
       });
     }
@@ -166,7 +171,7 @@
         return;
       }
 
-      if (!ionic.io.core.main.deviceConnectedToNetwork()) {
+      if (!Core.deviceConnectedToNetwork()) {
         return;
       }
 
@@ -350,7 +355,6 @@
     }
   }
 
-  ionic.io.register('analytics');
-  ionic.io.analytics.AnalyticsService = Analytics;
-  ionic.io.analytics.version = 'ANALYTICS_VERSION_STRING';
+  Ionic.namespace('Ionic', 'Analytics', Analytics, window);
+
 })();

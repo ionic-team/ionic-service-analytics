@@ -3,15 +3,14 @@ if ((typeof angular === 'object') && angular.module) {
 
   angular.module('ionic.service.analytics', ['ionic'])
 
-  .value('IONIC_ANALYTICS_VERSION', ionic.io.analytics.version)
+  .value('IONIC_ANALYTICS_VERSION', Ionic.Analytics.version)
 
   .factory('$ionicAnalytics', [function() {
-    var io = ionic.io.init();
-    return io.analytics;
+    return Ionic.Analytics;
   }])
 
   .factory('domSerializer', [function() {
-    return new ionic.io.analytics.serializers.DOMSerializer();
+    return new Ionic.AnalyticSerializers.DOMSerializer();
   }])
 
   .run(['$ionicAnalytics', '$state', function($ionicAnalytics, $state) {

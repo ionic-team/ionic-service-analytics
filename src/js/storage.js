@@ -1,11 +1,11 @@
 (function() {
 
-  var Settings = new ionic.io.core.Settings();
+  var Settings = new Ionic.IO.Settings();
 
   class BucketStorage {
     constructor(name) {
       this.name = name;
-      this.baseStorage = ionic.io.core.main.storage;
+      this.baseStorage = Ionic.IO.Core.getStorage();
     }
 
     get(key) {
@@ -21,7 +21,6 @@
     }
   }
 
-  ionic.io.register('analytics');
-  ionic.io.analytics.BucketStorage = BucketStorage;
+  Ionic.namespace('Ionic.AnalyticStorage', 'BucketStorage', BucketStorage, window);
 
 })();

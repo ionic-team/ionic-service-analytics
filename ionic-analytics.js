@@ -7,10 +7,10 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
 
 (function () {
 
-  var ApiRequest = ionic.io.util.ApiRequest;
-  var DeferredPromise = ionic.io.util.DeferredPromise;
-  var Logger = ionic.io.util.Logger;
-  var Settings = new ionic.io.core.Settings();
+  var ApiRequest = Ionic.IO.ApiRequest;
+  var DeferredPromise = Ionic.IO.DeferredPromise;
+  var Settings = new Ionic.IO.Settings();
+  var Core = Ionic.IO.Core;
 
   var ANALYTICS_KEY = null;
   var options = {};
@@ -18,7 +18,7 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
   var globalPropertiesFns = [];
 
   var Analytics = (function () {
-    function Analytics() {
+    function Analytics(config) {
       _classCallCheck(this, Analytics);
 
       this._dispatcher = null;
@@ -26,15 +26,16 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
       this._useEventCaching = true;
       this._serviceHost = Settings.getURL('analytics');
 
-      this.logger = new Logger({
+      this.logger = new Ionic.IO.Logger({
         'prefix': 'Ionic Analytics:'
       });
 
       this.logger._silence = true;
 
-      this.storage = ionic.io.core.main.storage;
-      this.cache = new ionic.io.analytics.BucketStorage('ionic_analytics');
+      this.storage = Ionic.IO.Core.getStorage();
+      this.cache = new Ionic.AnalyticStorage.BucketStorage('ionic_analytics');
       this._addGlobalPropertyDefaults();
+      this.register(config);
     }
 
     _createClass(Analytics, [{
@@ -45,7 +46,7 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
           // eventData._user = JSON.parse(JSON.stringify($ionicUser.get());
           eventData._app = {
             "app_id": Settings.get('app_id'), // eslint-disable-line
-            "analytics_version": ionic.io.analytics.version
+            "analytics_version": Ionic.Analytics.version
           };
         });
       }
@@ -148,7 +149,7 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
           return;
         }
 
-        if (!ionic.io.core.main.deviceConnectedToNetwork()) {
+        if (!Core.deviceConnectedToNetwork()) {
           return;
         }
 
@@ -372,14 +373,17 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
       get: function get() {
         return this._dispatchIntervalTime;
       }
+    }], [{
+      key: 'version',
+      get: function get() {
+        return '0.3.0';
+      }
     }]);
 
     return Analytics;
   })();
 
-  ionic.io.register('analytics');
-  ionic.io.analytics.AnalyticsService = Analytics;
-  ionic.io.analytics.version = '0.3.0';
+  Ionic.namespace('Ionic', 'Analytics', Analytics, window);
 })();
 
 },{}],2:[function(require,module,exports){
@@ -446,11 +450,10 @@ if (typeof angular === 'object' && angular.module) {
     }];
   };
 
-  angular.module('ionic.service.analytics', ['ionic']).value('IONIC_ANALYTICS_VERSION', ionic.io.analytics.version).factory('$ionicAnalytics', [function () {
-    var io = ionic.io.init();
-    return io.analytics;
+  angular.module('ionic.service.analytics', ['ionic']).value('IONIC_ANALYTICS_VERSION', Ionic.Analytics.version).factory('$ionicAnalytics', [function () {
+    return Ionic.Analytics;
   }]).factory('domSerializer', [function () {
-    return new ionic.io.analytics.serializers.DOMSerializer();
+    return new Ionic.AnalyticSerializers.DOMSerializer();
   }]).run(['$ionicAnalytics', '$state', function ($ionicAnalytics, $state) {
     $ionicAnalytics.setGlobalProperties(function (eventCollection, eventData) {
       if (!eventData._ui) {
@@ -633,8 +636,7 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
     return DOMSerializer;
   })();
 
-  ionic.io.register('analytics.serializers');
-  ionic.io.analytics.serializers.DOMSerializer = DOMSerializer;
+  Ionic.namespace('AnalyticSerializers', 'DOMSerializer', DOMSerializer, window);
 })();
 
 },{}],4:[function(require,module,exports){
@@ -646,14 +648,14 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
 
 (function () {
 
-  var Settings = new ionic.io.core.Settings();
+  var Settings = new Ionic.IO.Settings();
 
   var BucketStorage = (function () {
     function BucketStorage(name) {
       _classCallCheck(this, BucketStorage);
 
       this.name = name;
-      this.baseStorage = ionic.io.core.main.storage;
+      this.baseStorage = Ionic.IO.Core.getStorage();
     }
 
     _createClass(BucketStorage, [{
@@ -676,8 +678,7 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
     return BucketStorage;
   })();
 
-  ionic.io.register('analytics');
-  ionic.io.analytics.BucketStorage = BucketStorage;
+  Ionic.namespace('Ionic.AnalyticStorage', 'BucketStorage', BucketStorage, window);
 })();
 
 },{}]},{},[4,3,1,2]);

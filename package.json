@@ -20,7 +20,7 @@
   "eslintConfig": {
     "extends": "eslint:recommended",
     "globals": {
-      "ionic": true,
+      "Ionic": true,
       "angular": true
     },
     "env": {

@@ -55,6 +55,6 @@
 
   }
 
-  ionic.io.register('analytics.serializers');
-  ionic.io.analytics.serializers.DOMSerializer = DOMSerializer;
+  Ionic.namespace('AnalyticSerializers', 'DOMSerializer', DOMSerializer, window);
+
 })();
