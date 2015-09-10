@@ -13,6 +13,7 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
   var Core = Ionic.IO.Core;
 
   var ANALYTICS_KEY = null;
+  var DEFER_REGISTER = "DEFER_REGISTER";
   var options = {};
   var globalProperties = {};
   var globalPropertiesFns = [];
@@ -35,7 +36,9 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
       this.storage = Ionic.IO.Core.getStorage();
       this.cache = new Ionic.AnalyticStorage.BucketStorage('ionic_analytics');
       this._addGlobalPropertyDefaults();
-      this.register(config);
+      if (config !== DEFER_REGISTER) {
+        this.register(config);
+      }
     }
 
     _createClass(Analytics, [{
@@ -450,8 +453,13 @@ if (typeof angular === 'object' && angular.module) {
     }];
   };
 
+  var IonicAngularAnalytics = null;
+
   angular.module('ionic.service.analytics', ['ionic']).value('IONIC_ANALYTICS_VERSION', Ionic.Analytics.version).factory('$ionicAnalytics', [function () {
-    return Ionic.Analytics;
+    if (!IonicAngularAnalytics) {
+      IonicAngularAnalytics = new Ionic.Analytics("DEFER_REGISTER");
+    }
+    return IonicAngularAnalytics;
   }]).factory('domSerializer', [function () {
     return new Ionic.AnalyticSerializers.DOMSerializer();
   }]).run(['$ionicAnalytics', '$state', function ($ionicAnalytics, $state) {

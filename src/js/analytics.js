@@ -6,6 +6,7 @@
   var Core = Ionic.IO.Core;
 
   var ANALYTICS_KEY = null;
+  var DEFER_REGISTER = "DEFER_REGISTER";
   var options = {};
   var globalProperties = {};
   var globalPropertiesFns = [];
@@ -27,7 +28,9 @@
       this.storage = Ionic.IO.Core.getStorage();
       this.cache = new Ionic.AnalyticStorage.BucketStorage('ionic_analytics');
       this._addGlobalPropertyDefaults();
-      this.register(config);
+      if (config !== DEFER_REGISTER) {
+        this.register(config);
+      }
     }
 
     static get version() {

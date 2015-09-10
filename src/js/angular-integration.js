@@ -1,12 +1,17 @@
 // Add Angular integrations if Angular is available
 if ((typeof angular === 'object') && angular.module) {
 
+  var IonicAngularAnalytics = null;
+
   angular.module('ionic.service.analytics', ['ionic'])
 
   .value('IONIC_ANALYTICS_VERSION', Ionic.Analytics.version)
 
   .factory('$ionicAnalytics', [function() {
-    return Ionic.Analytics;
+    if (!IonicAngularAnalytics) {
+      IonicAngularAnalytics = new Ionic.Analytics("DEFER_REGISTER");
+    }
+    return IonicAngularAnalytics;
   }])
 
   .factory('domSerializer', [function() {
