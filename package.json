@@ -2,6 +2,7 @@
   "name": "ionic-service-analytics",
   "version": "0.2.5",
   "description": "Analytics service for Ionic apps",
+  "main": "ionic-analytics.js",
   "keywords": [
     "ionic",
     "analytics"
