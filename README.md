@@ -1,4 +1,6 @@
-ionic-service-analytics
-=======================
+# NOTICE:
 
-Ionic Analytics Service. See the official docs here: http://docs.ionic.io/v1.0/docs/analytics-from-scratch
+This library has been deprecated by the [ionic-platform-web-client](https://github.com/driftyco/ionic-platform-web-client). 
+
+Head over to our [docs](https://docs.ionic.io) to learn more about setting up a project with the Ionic Platform.
+
