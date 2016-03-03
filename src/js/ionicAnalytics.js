@@ -460,7 +460,7 @@ function($ionicAnalytics, $ionicApp, $ionicCoreSettings, $ionicUser, IONIC_ANALY
 
       var className = element.className;
       if (className) {
-        var classes = className.split(' ');
+        var classes = ('' + className).split(' ');
         for (var i = 0; i < classes.length; i++) {
           var c = classes[i];
           if (c) {
